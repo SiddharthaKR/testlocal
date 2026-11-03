@@ -1,0 +1,9 @@
+--- a/red_pitaya_asg_ch.v
++++ b/red_pitaya_asg_ch.v
+@@ -144,5 +144,5 @@
+    if (dac_rstn_i == 1'b0) begin
+       cyc_cnt   <= {CYCLE_BITS{1'b0}} ;
+-      rep_cnt   <= 16'h0 ;
++
+       dly_cnt   <= 32'h0 ;
+       dly_tick  <=  8'h0 ;

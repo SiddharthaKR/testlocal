@@ -1,0 +1,9 @@
+--- a/red_pitaya_lpf_block.v
++++ b/red_pitaya_lpf_block.v
+@@ -98,5 +98,5 @@
+ wire filter_off;
+ 
+-assign y_out = y[MAXSHIFT+SIGNALBITS-1:MAXSHIFT];
++assign y_out = y[MAXSHIFT+SIGNALBITS-2:MAXSHIFT-1];
+ assign shifted_delta = delta<<((shift<MAXSHIFT) ? shift : MAXSHIFT);
+ 

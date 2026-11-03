@@ -1,0 +1,5 @@
+# Engineer time estimates (hours) for the same task done by hand. Fill these in;
+# the report labels them "engineer estimate".
+H: null   # notch block from spec, tested and synthesized
+B: null   # PID timing/resource optimization
+C: null   # review 4 modules for bugs

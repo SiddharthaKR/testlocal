@@ -1,0 +1,14 @@
+vendor/
+runs/
+workspace/
+__pycache__/
+*.pyc
+sim_logs/
+equiv_logs/
+synth_logs/
+impl_logs/
+judge_tools/
+*.vvp
+sim.out
+config/opencode.json
+.claude/

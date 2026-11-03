@@ -1,0 +1,9 @@
+--- a/red_pitaya_filter_block.v
++++ b/red_pitaya_filter_block.v
+@@ -79,5 +79,5 @@
+   .rstn_i(rstn_i),
+   .shift(set_filter[j*8+SHIFTBITS-1:j*8]), 
+-  .filter_on(set_filter[j*8+7]),
++  .filter_on(set_filter[j*8+6]),
+   .highpass(set_filter[j*8+6]),
+   .signal_i(filter_in[j]),

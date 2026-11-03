@@ -1,0 +1,9 @@
+--- a/red_pitaya_iq_block.v
++++ b/red_pitaya_iq_block.v
+@@ -126,5 +126,5 @@
+ 		 // on was replaced by sync_i
+ 		 // if (addr==16'h100)   {cos_shifted_at_2f,sin_shifted_at_2f,cos_at_2f,sin_at_2f,pfd_on, on}   <= wdata[6-1:0];
+-		 if (addr==16'h100)   {cos_shifted_at_2f,sin_shifted_at_2f,cos_at_2f,sin_at_2f,pfd_on} <= wdata[6-1:1];
++		 if (addr==16'h100)   {cos_shifted_at_2f,sin_shifted_at_2f,cos_at_2f,sin_at_2f,pfd_on} <= wdata[5-1:0];
+          if (addr==16'h104)   start_phase   <= wdata[PHASEBITS-1:0];
+          if (addr==16'h108)   shift_phase   <= wdata[PHASEBITS-1:0];

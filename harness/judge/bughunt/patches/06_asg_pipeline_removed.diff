@@ -1,0 +1,9 @@
+--- a/red_pitaya_asg_ch.v
++++ b/red_pitaya_asg_ch.v
+@@ -114,5 +114,5 @@
+ always @(posedge dac_clk_i)
+ begin
+-   dac_mult <= $signed(dac_rdat) * $signed({1'b0,set_amp_i}) ;
++   dac_mult <= $signed(dac_rd) * $signed({1'b0,set_amp_i}) ;
+    dac_sum  <= $signed(dac_mult[28-1:13]) + $signed(set_dc_i) ;
+ 

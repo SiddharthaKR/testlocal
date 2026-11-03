@@ -1,0 +1,9 @@
+--- a/red_pitaya_pid_block.v
++++ b/red_pitaya_pid_block.v
+@@ -203,5 +203,5 @@
+          error <= $signed(dat_i_filtered) - $signed(diff_dat_i) ;
+       else
+-         error <= $signed(dat_i_filtered) - $signed(set_sp) ;
++         error <= $signed(set_sp) - $signed(dat_i_filtered) ;
+    end
+ end

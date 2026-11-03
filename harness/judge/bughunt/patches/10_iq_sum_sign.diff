@@ -1,0 +1,9 @@
+--- a/red_pitaya_iq_block.v
++++ b/red_pitaya_iq_block.v
+@@ -325,5 +325,5 @@
+         na_averages_remaining <= na_averages_remaining - 32'b1;
+         do_averaging <= 1'b1;
+-        iq_i_sum <= iq_i_sum + quadrature1;
++        iq_i_sum <= iq_i_sum - quadrature1;
+         iq_q_sum <= iq_q_sum + quadrature2;
+     end
