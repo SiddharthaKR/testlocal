@@ -118,7 +118,8 @@ def key():
         one = list(orig); body = one[ln - 1].rstrip("\r\n"); eol = one[ln - 1][len(body):]
         one[ln - 1] = (body.replace(old, new) if new else "") + eol
         d = difflib.unified_diff(orig, one, f"a/{f}", f"b/{f}", n=2)
-        (HERE / "patches" / f"{i:02d}_{bid}.diff").write_text("".join(d), newline="")
+        text = "".join(d).replace("\r\n", "\n")   # LF, matches .gitattributes
+        (HERE / "patches" / f"{i:02d}_{bid}.diff").write_text(text, newline="")
     ak = dict(bugs=[dict(id=b, file=f, line=ln, cls=c, description=d, keywords=k) for b, f, ln, _, _, c, d, k in BUGS],
               preexisting=[dict(file=f, lines=[a, z], note=n) for f, a, z, n in PREEXISTING],
               review_files=REVIEW, match_window=3)

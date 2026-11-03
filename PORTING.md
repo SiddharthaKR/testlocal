@@ -15,6 +15,8 @@ git clone https://github.com/SiddharthaKR/testlocal.git ai_demo && cd ai_demo
 bash harness/setup_vendor.sh
 ```
 This clones PyRPL into `vendor/pyrpl`, checks out `pyrpl_commit`, tags it `demo-baseline`, makes it read-only, and runs `check_vendor.sh`.
+- It needs access to github.com. Without it, point it at a mirror: `PYRPL_URL=<git url> bash harness/setup_vendor.sh`.
+- It is safe to rerun: a missing or half-cloned `vendor/pyrpl` is cloned again. On Windows it enables long paths, because some PyRPL notebook paths exceed Windows' path limit.
 
 ## 3. Edit `config/env.yaml` (fill in every TODO)
 - `upstream_url`: the LM Studio endpoint, e.g. `http://<host>:1234/v1`
@@ -24,6 +26,8 @@ This clones PyRPL into `vendor/pyrpl`, checks out `pyrpl_commit`, tags it `demo-
 - `fpga_part` if the board is a Z20 (`xc7z020clg400-1`)
 
 `config/opencode.json` is generated from env.yaml on every run. Do not edit it.
+
+To use the laptop/Ollama setup instead: `cp config/env.laptop.yaml config/env.yaml`. It uses `python_cmd: py` and `iverilog_dir: /c/iverilog/bin`.
 
 ## 4. Validate the judges (mandatory before any agent run)
 ```bash
