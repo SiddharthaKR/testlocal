@@ -24,6 +24,10 @@ def judge(task, candidate, cfg):
 
 def main():
     cfg = load_config()
+    ivl = tool_env(cfg)["IVERILOG_DIR"]
+    if not shutil.which(os.path.join(ivl, "iverilog") if ivl else "iverilog"):
+        print("SELFTEST: FAILED - iverilog not found (set iverilog_dir in basic/config.yaml or put it on PATH)")
+        sys.exit(1)
     bad = 0
     for task in sorted(TARGET):
         hidden = os.path.join(BASIC, "tasks", task, "hidden")

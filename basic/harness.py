@@ -38,7 +38,11 @@ def tool_env(cfg):
     """Environment variables read by tools/*.ts and the judges.
     PYTHON_CMD is the absolute path of the interpreter running this harness: launcher names like
     `py` (or Windows' `python` store alias) cannot be started by the tools' Bun runtime."""
-    return {"IVERILOG_DIR": native_path(cfg.get("iverilog_dir", "")),
+    d = native_path(cfg.get("iverilog_dir", "") or "")
+    if d and not os.path.isdir(d):   # e.g. the laptop path /c/iverilog/bin on a Linux server
+        print(f"WARNING: iverilog_dir '{d}' does not exist; using iverilog from PATH", file=sys.stderr)
+        d = ""
+    return {"IVERILOG_DIR": d,
             "PYTHON_CMD": sys.executable}
 
 

@@ -4,5 +4,5 @@ model: gemma4-e4b-ctx65536:latest
 context_limit: 65536
 timeout_min: 20
 workspace: ../../basic_ws                 # relative to basic/; outside the repo; recreated every run
-iverilog_dir: /c/iverilog/bin             # empty = iverilog/vvp are on PATH
+iverilog_dir: /c/iverilog/bin             # empty = iverilog/vvp are on PATH (Linux server: leave empty)
 opencode_cmd:                 # path to opencode (1.x needed for custom tools); empty = use PATH
