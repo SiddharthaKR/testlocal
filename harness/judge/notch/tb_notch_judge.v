@@ -104,6 +104,14 @@ initial begin
       end
       check("no_x_after_reset", nerr == 0, nerr, 0);
 
+      // --- reset values (spec: all coefficients and bypass are 0 after reset), read before any write
+      bus_read(16'h100, rd); check("reset_b0", rd === 32'h0, rd, 0);
+      bus_read(16'h104, rd); check("reset_b1", rd === 32'h0, rd, 0);
+      bus_read(16'h108, rd); check("reset_b2", rd === 32'h0, rd, 0);
+      bus_read(16'h10C, rd); check("reset_a1", rd === 32'h0, rd, 0);
+      bus_read(16'h110, rd); check("reset_a2", rd === 32'h0, rd, 0);
+      bus_read(16'h114, rd); check("reset_bypass", rd === 32'h0, rd, 0);
+
       // --- register readback: negative and positive 18-bit values, sign-extended
       ok = 1;
       bus_write(16'h100, 32'h0002_0001); bus_read(16'h100, rd); check("rb_b0", rd === 32'hFFFE_0001, rd, 32'hFFFE_0001);

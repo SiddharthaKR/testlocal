@@ -7,6 +7,8 @@ HERE = Path(__file__).resolve().parent
 REF = (HERE / "red_pitaya_notch_block.v").read_text()
 
 VARIANTS = {
+    # bypass comes out of reset enabled (spec: all registers 0 after reset)
+    "bypass_reset_high": [("      bypass <= 1'b0;", "      bypass <= 1'b1;")],
     # truncate instead of round
     "truncate": [("(acc + (1 <<< (COEF_FRAC-1))) >>> COEF_FRAC", "acc >>> COEF_FRAC")],
     # feedback uses the unsaturated (wrapped-free, full-width) y; output still saturated

@@ -11,4 +11,4 @@ DEFAULT_SEED = 20261103
 # run whose LLM traffic contains it (or a hidden path name).
 CANARY = "CANARY-b81aed453118"
 LEAK_MARKERS = [CANARY, "ref_solutions", "harness/judge", "harness\\judge","tb_notch_judge",
-                "tb_pid_equiv", "gen_stimuli", "make_broken", "judge_selftest"]
+                "tb_pid_equiv", "gen_stimuli", "make_broken", "judge_selftest", "answer_key", "bughunt"]

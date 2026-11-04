@@ -1,3 +1,4 @@
+# CANARY-b81aed453118 (hidden file marker)
 --- a/red_pitaya_iq_block.v
 +++ b/red_pitaya_iq_block.v
 @@ -126,5 +126,5 @@

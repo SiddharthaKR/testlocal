@@ -5,7 +5,7 @@ Only `config/env.yaml` changes between machines. Do these steps in order.
 ## 1. Prerequisites on the server
 - Python 3 with `numpy matplotlib pyyaml`
 - iverilog 12 (`iverilog` and `vvp` on PATH, or set `iverilog_dir`)
-- opencode (same major version as tested: v2.1.x)
+- opencode **1.17.x** (tested: 1.17.15). The full harness also runs on 2.x, but the basic demo's custom tools (`.opencode/tools/*.ts`) only load on 1.x.
 - Vivado (optional; without it synthesis/timing print `SKIPPED (no vivado)`)
 - LM Studio serving Gemma 4 26B-A4B through its OpenAI-compatible endpoint
 

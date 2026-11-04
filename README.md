@@ -30,6 +30,6 @@ Each run writes `runs/<timestamp>_<track>/report.html`; `runs/summary.html` cove
 - `harness/`: proxy, agent tools, task prompts, hidden judges, report generator, `run_demo.sh`
 - `docs/laptop_results.md`: laptop results (Gemma 4 E4B, 32k vs 64k context)
 
-The agent works in `workspace_dir` (outside this repo), so it cannot read the judges. Every hidden file carries a canary string, and a run is marked invalid if the canary reaches the model.
+The agent works in `workspace_dir` (outside this repo), and opencode's file tools are denied access outside it. Its shell still runs as the same OS user, so a determined agent could read the repo. Command-pattern rules make this harder but are not a sandbox. Every hidden file therefore carries a canary string, and a run is marked invalid if the canary reaches the model or the workspace. For evaluations that must be tamper-proof, run the agent in a container or under a separate OS user without read access to this repo.
 
-Requirements: Python 3 (numpy, matplotlib, pyyaml), iverilog 12, opencode, git; Vivado is optional (steps print SKIPPED without it).
+Requirements: Python 3 (numpy, matplotlib, pyyaml), iverilog 12, opencode 1.17.x (custom tools need 1.x), git; Vivado is optional (steps print SKIPPED without it).

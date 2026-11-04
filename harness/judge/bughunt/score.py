@@ -143,7 +143,7 @@ def main():
     a = ap.parse_args()
     key = yaml.safe_load((HERE / f"answer_key_{a.level}.yaml").read_text())
     reports, err = load_reports(a.bugs_json)
-    res = dict(track="C", level=a.level, assist=a.assist, match_window=key.get("match_window", 3), input_warning=err)
+    res = dict(track="C", level=a.level, assist=a.assist, review_files=key.get("review_files", []), match_window=key.get("match_window", 3), input_warning=err)
     res.update(score(reports, key))
     res["status"] = "SCORED" if reports or not err else "INVALID_OUTPUT"
     out = Path(a.outdir); out.mkdir(parents=True, exist_ok=True)

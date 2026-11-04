@@ -190,6 +190,19 @@ class Proxy(BaseHTTPRequestHandler):
             f.write(json.dumps(rec) + "\n")
 
 
+class QuietServer(ThreadingHTTPServer):
+    """opencode closing a keep-alive connection is normal: log one line instead of a traceback."""
+    daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        import sys as _sys
+        err = _sys.exc_info()[1]
+        if isinstance(err, (ConnectionResetError, ConnectionAbortedError, BrokenPipeError)):
+            print(f"client {client_address[0]}:{client_address[1]} disconnected", flush=True)
+        else:
+            super().handle_error(request, client_address)
+
+
 def main():
     env = yaml.safe_load((ROOT / "config" / "env.yaml").read_text())
     ap = argparse.ArgumentParser()
@@ -200,7 +213,7 @@ def main():
     Proxy.upstream = urllib.parse.urlparse(a.upstream)
     Proxy.run_dir = Path(a.run_dir).resolve()
     Proxy.run_dir.mkdir(parents=True, exist_ok=True)
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), Proxy)
+    srv = QuietServer(("127.0.0.1", a.port), Proxy)
     print(f"llm_proxy: 127.0.0.1:{a.port} -> {a.upstream}  log={Proxy.run_dir}", flush=True)
     try:
         srv.serve_forever()

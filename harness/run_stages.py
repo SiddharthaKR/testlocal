@@ -191,6 +191,16 @@ def judge(track, ws, run, assist, level="hard"):
         log(f"JUDGE {track}: JUDGE_ERROR (see judge_console.log)")
         return time.time() - t0, cand
     log((r.stdout.strip().splitlines() or ["judge produced no output"])[0])
+    if track == "B":   # equivalence alone is not success: an untouched design is trivially equivalent
+        orig = ws / "tasks" / "B" / "ref" / f"{B_LEVELS[level][0]}.v"
+        if orig.exists() and Path(cand[0]).exists() and Path(cand[0]).read_bytes() == orig.read_bytes():
+            j = json.loads((run / "judge.json").read_text())
+            if j.get("status") == "PASS":
+                j["equivalence"] = "PASS"
+                j["status"] = "NO_CHANGE"
+                j.setdefault("reasons", []).append("the agent did not change the design")
+                (run / "judge.json").write_text(json.dumps(j, indent=1))
+                log("JUDGE B: NO_CHANGE (design untouched)")
     return time.time() - t0, cand
 
 

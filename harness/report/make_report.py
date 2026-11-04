@@ -280,6 +280,9 @@ def track_b(run, judge):
         out["figures"].append((png_b64(fig), "Left: how much more or less of the chip the optimized version uses, "
                                "per kind of resource; right: the fastest clock each version can run at "
                                "(higher is better)."))
+    elif judge.get("status") == "NO_CHANGE":
+        out["headline"] = "The AI did not change the design"
+        out["sub"] = "The block is unchanged, so there is no optimization to check."
     elif judge.get("status") == "COMPILE_ERROR":
         out["headline"] = "The AI's modified design did not compile"
         out["sub"] = "The Verilog it changed has syntax errors, so its behaviour could not be compared."
@@ -302,7 +305,8 @@ def track_c(run, judge):
     f, n, fp = judge["found"], judge["n_bugs"], judge["false_positives"]
     took = f" in {fmt_dur(meta['wall_seconds'])}" if meta.get("wall_seconds") else ""
     out = dict(figures=[], headline=f"Found {f} of {n} bugs{took}",
-               sub=f"{n} bugs were hidden in 4 real FPGA modules. The AI also raised {fp} false "
+               sub=f"{n} bugs were hidden in {len(judge.get('review_files') or []) or 'several'} real FPGA source files. "
+                   f"The AI also raised {fp} false "
                    f"alarm{'s' if fp != 1 else ''}." + (" Its answer file could not be read."
                                                         if judge.get("status") == "INVALID_OUTPUT" else ""))
     bugs = judge["per_bug"]
