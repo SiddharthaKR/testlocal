@@ -1,9 +1,0 @@
-# Settings for the basic demo. Edit these, then run: py basic/harness.py <task>
-base_url: http://localhost:11434/v1       # any OpenAI-compatible server (default: Ollama)
-model: gemma4-e4b-ctx65536:latest
-context_limit: 65536
-timeout_min: 20
-workspace: ../../basic_ws                 # relative to basic/; outside the repo; recreated every run
-python_cmd: py                            # use python3 on Linux
-iverilog_dir: /c/iverilog/bin             # empty = iverilog/vvp are on PATH
-opencode_cmd:                 # path to opencode (1.x needed for custom tools); empty = use PATH
