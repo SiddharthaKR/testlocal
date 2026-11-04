@@ -61,8 +61,14 @@ def start_proxy(run):
 
 
 def check_upstream():
+    req = urllib.request.Request(str(ENV["upstream_url"]).rstrip("/") + "/models")
+    if ENV.get("api_key_env"):
+        key = os.environ.get(ENV["api_key_env"])
+        if not key:
+            raise SystemExit(f"env var {ENV['api_key_env']} (api_key_env) is not set")
+        req.add_header("Authorization", f"Bearer {key}")
     try:
-        urllib.request.urlopen(str(ENV["upstream_url"]).rstrip("/") + "/models", timeout=5).read()
+        urllib.request.urlopen(req, timeout=15).read()
         return True
     except OSError as e:
         log(f"WARNING: upstream {ENV['upstream_url']} not reachable: {e}")
@@ -137,9 +143,9 @@ def find_one(ws, name, preferred, module=None):
     return None
 
 
-def judge(track, ws, run, assist):
+def judge(track, ws, run, assist, level="hard"):
     t0 = time.time()
-    extra = ["--assist"] if assist else []
+    extra = ["--level", level] + (["--assist"] if assist else [])
     if track == "H":
         cand = find_one(ws, "red_pitaya_notch_block.v", RTL_REL / "red_pitaya_notch_block.v",
                         module="red_pitaya_notch_block")
@@ -207,6 +213,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("run"); ap.add_argument("ws"); ap.add_argument("track")
     ap.add_argument("--assist", action="store_true"); ap.add_argument("--interactive", action="store_true")
+    ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
     run, ws = Path(a.run).resolve(), Path(a.ws).resolve()
     meta_p = run / "run_meta.json"
@@ -228,7 +235,7 @@ def main():
 
     changed, viv_agent = collect(ws, run)
     log(f"agent changed {len(changed)} files")
-    judge_s, cand = judge(a.track, ws, run, a.assist)
+    judge_s, cand = judge(a.track, ws, run, a.assist, a.level)
     viv_judge = qor(a.track, cand, run)
 
     leak = subprocess.run([PY, str(HARNESS / "judge" / "leak_check.py"), str(run), str(ws)],

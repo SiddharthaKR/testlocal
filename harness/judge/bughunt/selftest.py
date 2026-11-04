@@ -46,7 +46,24 @@ with tempfile.TemporaryDirectory() as td:
         a = len((B.RTL / f).read_bytes().splitlines()); b = len((td / "bug" / f).read_bytes().splitlines())
         check(f"{f} line count unchanged", a == b, f"{a} vs {b}")
 
-key = yaml.safe_load((HERE / "answer_key.yaml").read_text())
+# every level: its review set compiles with exactly its bugs, and its own key scores 100%
+for level, lv in B.LEVELS.items():
+    with tempfile.TemporaryDirectory() as td:
+        out = B.build(Path(td), level)
+        n_changed = sum((out / f).read_bytes() != (B.RTL / f).read_bytes() for f in lv["review"])
+        tops = [Path(f).stem for f in lv["review"] if f != "red_pitaya_lpf_block.v"]
+        rcs = [subprocess.run([iverilog, "-g2012", "-s", t, "-o", str(Path(td) / "x.vvp")]
+                              + [str(p) for p in sorted(out.glob("*.v"))], capture_output=True).returncode
+               for t in tops]
+        check(f"level {level}: review set compiles", not any(rcs), str(rcs))
+        check(f"level {level}: every review file has a seeded bug", n_changed == len(lv["review"]),
+              f"{n_changed}/{len(lv['review'])}")
+    k = yaml.safe_load((HERE / f"answer_key_{level}.yaml").read_text())
+    r = S.score([dict(file=b["file"], line=b["line"], description=b["description"]) for b in k["bugs"]], k)
+    check(f"level {level}: own answer key scores {len(k['bugs'])}/{len(k['bugs'])}",
+          r["found"] == len(k["bugs"]) and r["false_positives"] == 0, f"{r['found']} fp {r['false_positives']}")
+
+key = yaml.safe_load((HERE / "answer_key_hard.yaml").read_text())
 exact = [dict(file=b["file"], line=b["line"], description=b["description"]) for b in key["bugs"]]
 n = len(exact)
 cases = [

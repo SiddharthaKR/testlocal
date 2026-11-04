@@ -2,12 +2,9 @@
 
 Review these Verilog modules (in `review/`) for **functional bugs**:
 
-- `red_pitaya_pid_block.v`
-- `red_pitaya_filter_block.v` (uses `red_pitaya_lpf_block.v`, also review that one)
-- `red_pitaya_iq_block.v`
-- `red_pitaya_asg_ch.v`
+{REVIEW_FILES}
 
-The other files in `review/` are dependencies, so the set compiles. You do not need to review them.
+Any other files in `review/` are dependencies, so the set compiles. You do not need to review them.
 
 A functional bug is anything that makes the hardware compute the wrong result, for example:
 - wrong sign or bit width
@@ -19,7 +16,7 @@ A functional bug is anything that makes the hardware compute the wrong result, f
 
 Style issues and lint warnings do not count.
 
-Write your findings to `bugs.json` in the workspace root, as a JSON list:
+Create `bugs.json` early, as soon as you find the first bug, and add to it as you go. A missing file scores zero. Write it in the workspace root, as a JSON list:
 
 ```json
 [

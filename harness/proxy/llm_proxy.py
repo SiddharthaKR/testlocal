@@ -104,18 +104,27 @@ class Proxy(BaseHTTPRequestHandler):
             (self.run_dir / "requests" / f"{rec['n']:05d}.json").write_bytes(raw)
 
         cls = http.client.HTTPSConnection if self.upstream.scheme == "https" else http.client.HTTPConnection
-        conn = cls(self.upstream.hostname, self.upstream.port, timeout=600)
         headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_HEADERS}
         if raw is not None:
             headers["Content-Length"] = str(len(raw))
-        try:
-            conn.request(self.command, self._target_path(), body=raw, headers=headers)
-            resp = conn.getresponse()
-        except OSError as e:
-            rec["status"] = f"upstream_error: {e}"
-            self.send_error(502, str(e))
-            self._log(rec, is_chat)
-            return
+        # hosted APIs (e.g. Google AI Studio) rate-limit: retry 429/503 with backoff before answering
+        rec["retries"] = 0
+        for attempt in range(6):
+            conn = cls(self.upstream.hostname, self.upstream.port, timeout=600)
+            try:
+                conn.request(self.command, self._target_path(), body=raw, headers=headers)
+                resp = conn.getresponse()
+            except OSError as e:
+                rec["status"] = f"upstream_error: {e}"
+                self.send_error(502, str(e))
+                self._log(rec, is_chat)
+                return
+            if resp.status not in (429, 503) or attempt == 5:
+                break
+            wait = float(resp.getheader("Retry-After") or 0) or min(60, 5 * 2 ** attempt)
+            resp.read(); conn.close()
+            rec["retries"] += 1
+            time.sleep(wait)
 
         rec["status"] = resp.status
         self.send_response(resp.status)
@@ -164,6 +173,9 @@ class Proxy(BaseHTTPRequestHandler):
             if usage and usage.get("prompt_tokens") is not None:
                 rec["prompt_tokens"] = usage.get("prompt_tokens")
                 rec["completion_tokens"] = usage.get("completion_tokens")
+                # AI Studio Gemma reports completion_tokens=0; the real count is total - prompt
+                if not rec["completion_tokens"] and (usage.get("total_tokens") or 0) > rec["prompt_tokens"]:
+                    rec["completion_tokens"] = usage["total_tokens"] - rec["prompt_tokens"]
             else:
                 rec["usage_estimated"] = True
                 rec["prompt_tokens"] = est_tokens(message_chars(body))

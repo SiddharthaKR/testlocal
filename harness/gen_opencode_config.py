@@ -28,7 +28,10 @@ cfg = {
         "local": {
             "npm": "@ai-sdk/openai-compatible",
             "name": "Local via proxy",
-            "options": {"baseURL": f"http://localhost:{env['proxy_port']}/v1"},
+            "options": {"baseURL": f"http://localhost:{env['proxy_port']}/v1",
+                        # hosted APIs: opencode reads the key from the environment at run time;
+                        # it is never written to disk or logged (the proxy saves bodies, not headers)
+                        **({"apiKey": "{env:%s}" % env["api_key_env"]} if env.get("api_key_env") else {})},
             # limit lets opencode compact the history itself instead of Ollama silently truncating
             "models": {env["model"]: {"name": env["model"],
                                       "limit": {"context": int(env["context_limit"]), "output": 8192}}},
@@ -38,6 +41,8 @@ cfg = {
     "permission": {
         "*": "allow",
         "external_directory": "deny",       # nothing outside the workspace
+        # same tool call 3x in a row (e.g. an edit with identical old/new text): refuse, so the model changes course
+        "doom_loop": "deny",
         "read": rules("allow"),
         "edit": rules("allow"),
         "glob": rules("allow"),

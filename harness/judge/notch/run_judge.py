@@ -65,6 +65,7 @@ def main():
     ap.add_argument("--n", type=int, default=4096)
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--assist", action="store_true", help="record assist: true in judge.json")
+    ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
     a.candidate = str(Path(a.candidate).resolve())
 

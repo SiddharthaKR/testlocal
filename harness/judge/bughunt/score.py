@@ -124,10 +124,11 @@ def main():
     ap.add_argument("outdir")
     ap.add_argument("bugs_json")
     ap.add_argument("--assist", action="store_true")
+    ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
-    key = yaml.safe_load((HERE / "answer_key.yaml").read_text())
+    key = yaml.safe_load((HERE / f"answer_key_{a.level}.yaml").read_text())
     reports, err = load_reports(a.bugs_json)
-    res = dict(track="C", assist=a.assist, match_window=key.get("match_window", 3), input_warning=err)
+    res = dict(track="C", level=a.level, assist=a.assist, match_window=key.get("match_window", 3), input_warning=err)
     res.update(score(reports, key))
     res["status"] = "SCORED" if reports or not err else "INVALID_OUTPUT"
     out = Path(a.outdir); out.mkdir(parents=True, exist_ok=True)

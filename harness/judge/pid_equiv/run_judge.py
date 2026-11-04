@@ -84,6 +84,7 @@ def main():
     ap.add_argument("--cycles", type=int, default=100_000)
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
     ap.add_argument("--assist", action="store_true")
+    ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
     t0 = time.time()
     out = Path(a.outdir).resolve(); data = out / "judge_data"; data.mkdir(parents=True, exist_ok=True)
