@@ -40,10 +40,10 @@ def load_dut_csv(path):
     return ys, n_x
 
 
-def compare(expected, ys, n_x):
+def compare(expected, ys, n_x, max_latency=None):
     n = len(expected)
     best = None
-    for k in range(MAX_LATENCY + 1):
+    for k in range((MAX_LATENCY if max_latency is None else max_latency) + 1):
         got = [ys.get(i + k) for i in range(n)]
         bad = [i for i in range(n) if got[i] != expected[i]]
         r = dict(latency=k, n_match=n - len(bad), n_compared=n,
@@ -59,11 +59,11 @@ def compare(expected, ys, n_x):
     return best
 
 
-def compare_files(expected_txt, dut_csv):
+def compare_files(expected_txt, dut_csv, max_latency=None):
     with open(expected_txt) as f:
         expected = [int(l) for l in f if l.strip()]
     ys, n_x = load_dut_csv(dut_csv)
-    return compare(expected, ys, n_x)
+    return compare(expected, ys, n_x, max_latency)
 
 
 if __name__ == "__main__":

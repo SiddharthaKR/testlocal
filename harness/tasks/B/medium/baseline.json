@@ -1,0 +1,7 @@
+{
+  "status": "PLACEHOLDER",
+  "note": "No Vivado on the laptop. On a Vivado machine run run_impl.sh on pid_ref.v, then set T_target = 1/(1.3*Fmax_base).",
+  "LUT": null, "FF": null, "DSP": null, "WNS": null, "Fmax_MHz": null,
+  "period_ns": 8.0,
+  "T_target_ns": 6.0
+}

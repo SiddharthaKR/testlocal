@@ -104,11 +104,14 @@ def track_h(run, judge):
             out["sub"] = "This is a problem in the test setup, not a verdict on the AI. Details are in the technical section."
         elif st == "NO_CANDIDATE":
             out["headline"] = "The AI did not produce a design"
-            out["sub"] = "No red_pitaya_notch_block.v was written."
+            out["sub"] = f"No {judge.get('module', 'red_pitaya_notch_block')}.v was written."
         else:
             out["headline"] = "The design could not be checked"
             out["sub"] = "The independent checker produced no result."
         return out
+
+    if judge.get("level", "hard") != "hard":
+        return track_h_simple(data, case, jcase, judge, passed, out)
 
     n = case["n"]
     lat = jcase.get("latency") or 0
@@ -185,6 +188,53 @@ def track_h(run, judge):
                            "Where the thin line leaves the wide one, the hardware gives a different answer "
                            "from the design model."))
     out["atten_db"] = round(atten, 1) if passed else None
+    return out
+
+
+H_PLAIN = {"easy": ("gain block", "scales and shifts a signal"),
+           "medium": ("8-tap filter", "smooths and shapes a signal")}
+
+
+def track_h_simple(data, case, jcase, judge, passed, out):
+    """Easy/medium spec tasks: what goes in/out, and hardware vs design model."""
+    what, does = H_PLAIN.get(judge.get("level"), ("block", "processes a signal"))
+    n_cases, n_pass = len(judge.get("cases", [])), judge.get("n_pass", 0)
+    if passed:
+        out["headline"] = f"New {what} matches the design exactly"
+        out["sub"] = (f"The AI wrote a {what} that {does}. On {n_cases} hidden test signals, its output "
+                      f"is identical to the design model, sample for sample.")
+    else:
+        out["headline"] = f"The new {what} did not pass the hidden check"
+        out["sub"] = (f"It matched the design model on {n_pass} of {n_cases} hidden test signals. "
+                      f"The plots show what the hardware actually produced.")
+    n = case["n"]
+    lat = jcase.get("latency") or 0
+    x = read_ints(data / "stim" / f"{case['name']}.txt")
+    model = read_ints(data / "expected" / f"{case['name']}.txt")
+    y = read_dut(data / f"dut_{case['name']}.csv", lat, n)
+    seg = slice(n // 2, n // 2 + 300)
+    k = np.arange(n)[seg]
+    fig, ax = plt.subplots(2, 1, figsize=(10, 5.6), sharex=True)
+    ax[0].plot(k, x[seg], color=C_BEFORE, lw=1.3)
+    ax[0].set_title("Signal going in", loc="left")
+    ax[1].plot(k, y[seg], color=C_AFTER, lw=1.3)
+    ax[1].set_title("Signal coming out of the AI's hardware", loc="left")
+    for a in ax:
+        a.set_ylabel("signal level"); a.set_ylim(-8192, 8191)
+    ax[1].set_xlabel("sample number"); fig.tight_layout()
+    out["figures"].append((png_b64(fig), f"One of the hidden test signals before and after the {what}."))
+    fig, a = plt.subplots(figsize=(10, 3.4))
+    a.plot(k, model[seg], color=C_BASE, lw=5, alpha=0.35, label="design model (Python)")
+    a.plot(k, y[seg], color=C_INK, lw=1.3, label="hardware output")
+    exact = bool(np.array_equal(model, y))
+    a.set_title("Hardware matches design model exactly" if exact else "Hardware differs from the design model",
+                loc="left")
+    a.set_xlabel("sample number"); a.set_ylabel("signal level")
+    a.legend(frameon=False, loc="lower right", bbox_to_anchor=(1, 1.0), ncol=2)
+    out["figures"].append((png_b64(fig), "The hardware output (thin line) lies exactly on top of the design "
+                           "model (wide line) for every sample." if exact else
+                           "Where the thin line leaves the wide one, the hardware gives a different answer "
+                           "from the design model."))
     return out
 
 
@@ -323,6 +373,11 @@ summary{cursor:pointer;font-weight:600;color:var(--ink2)}
 table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0}
 td,th{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
 th{color:var(--ink2);font-weight:600}
+.grid td,.grid th{text-align:center;padding:12px 8px}.grid th.task{text-align:left;font-size:15px;color:var(--ink)}
+.grid .big{font-size:20px;font-weight:700}.grid .small{color:var(--ink2);font-size:13px}
+.grid td.good{background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.grid td.bad{background:color-mix(in srgb,var(--bad) 9%,transparent)}.grid td.empty{color:var(--ink2)}
+h2.model{font-size:16px;margin:22px 0 4px}
 code,pre{font:13px ui-monospace,Consolas,monospace}pre{white-space:pre-wrap;overflow-wrap:anywhere}
 a{color:var(--accent)}.scroll{overflow-x:auto}
 """
@@ -367,7 +422,8 @@ def run_report(run):
         b.append("<div class='banner'>The agent ran out of time and was stopped.</div>")
     if leak.get("leak_suspected"):
         b.append("<div class='banner'>INVALID RUN: the agent saw hidden test material.</div>")
-    b.append(f"<h1>Track {esc(track)}: {esc(TRACK_NAMES.get(track, ''))}</h1>")
+    b.append(f"<h1>Track {esc(track)}: {esc(TRACK_NAMES.get(track, ''))} · "
+             f"{esc(meta.get('level', judge.get('level', 'hard')).capitalize())} level</h1>")
     b.append(f"<div class='headline'>{esc(r['headline'])}</div>")
     b.append(f"<p class='sub'>{r['sub']}</p>")
     if track == "C" and "found" in judge:
@@ -427,6 +483,7 @@ def run_report(run):
     return dict(track=track, assist=assist, status=status, headline=r["headline"], run=run.name,
                 found=judge.get("found"), n_bugs=judge.get("n_bugs"),
                 plumbing=meta.get("demo_model") is False,
+                level=meta.get("level", "hard"), model=meta.get("model", "?"),
                 wall_seconds=meta.get("wall_seconds"), total_tokens=met["total_tokens"],
                 peak_context_pct=met["peak_context_pct"], leak=bool(leak.get("leak_suspected")))
 
@@ -441,35 +498,45 @@ def summary(runs_dir):
             res.append(dict(run=d.name, track=load_json(d / "run_meta.json").get("track"), status="REPORT_ERROR",
                             headline=f"report failed: {e}", assist=False, total_tokens=0, wall_seconds=None,
                             peak_context_pct=None, leak=False))
-    b = ["<h1>AI-assisted FPGA development: summary of all runs</h1>",
-         "<p class='sub'>Pass rates and medians over every real run. Assisted runs are listed separately "
-         "and never counted.</p><div class='tiles'>"]
-    for t in ("H", "B", "C"):
-        real = [r for r in res if r["track"] == t and not r["assist"] and not r["leak"] and not r.get("plumbing")
-                and r["status"] not in ("JUDGE_ERROR", "REPORT_ERROR")]   # setup failures are not verdicts
-        if real and t == "C":
-            fs = [r["found"] for r in real if r.get("found") is not None]
-            big = (f"Median {statistics.median(fs):g} of {real[-1]['n_bugs']} bugs found" if fs
-                   else "No scored runs")
-            wt = [r["wall_seconds"] for r in real if r["wall_seconds"]]
-            small = f"Over {len(real)} run{'s' if len(real) != 1 else ''}." + \
-                    (f" Median time {fmt_dur(statistics.median(wt))}." if wt else "")
-        elif real:
-            npass = sum(r["status"] == "PASS" for r in real)
-            wt = [r["wall_seconds"] for r in real if r["wall_seconds"]]
-            last = real[-1]["headline"]
-            big, small = f"{npass} of {len(real)} runs passed", ""
-            if t == "B":   # without Vivado, B can only show unchanged behaviour, not a speed-up
-                big = f"{npass} of {len(real)} runs kept the same behaviour"
-                small = "Speed and size need the FPGA tools to measure. "
-            small += (f"Median time {fmt_dur(statistics.median(wt))}. " if wt else "") + f"Latest: {esc(last)}"
+    LEVELS = ("easy", "medium", "hard")
+
+    def cell(runs, t):
+        """One plain-language result for a (track, level) group of real runs."""
+        if not runs:
+            return "<td class='empty'>not run yet</td>"
+        wt = [r["wall_seconds"] for r in runs if r["wall_seconds"]]
+        tm = f"<div class='small'>{len(runs)} run{'s' if len(runs) != 1 else ''}" +              (f" · median {fmt_dur(statistics.median(wt))}" if wt else "") + "</div>"
+        if t == "C":
+            fs = [r["found"] for r in runs if r.get("found") is not None]
+            big = f"{statistics.median(fs):g} of {runs[-1]['n_bugs']} bugs found" if fs else "no score"
+            ok = bool(fs) and statistics.median(fs) >= runs[-1]["n_bugs"] / 2
         else:
-            big, small = "No real runs yet", ""
-        b.append(f"<div class='tile'><h1>Track {t}: {esc(TRACK_NAMES[t])}</h1>"
-                 f"<div class='headline'>{esc(big)}</div><p class='sub' style='font-size:15px'>{small}</p></div>")
-    b.append("</div>")
+            npass = sum(r["status"] == "PASS" for r in runs)
+            big = f"{npass} of {len(runs)} {'kept behaviour' if t == 'B' else 'passed'}"
+            ok = npass > 0
+        return f"<td class='{'good' if ok else 'bad'}'><div class='big'>{esc(big)}</div>{tm}</td>"
+
+    def real(r):
+        return not r["assist"] and not r["leak"] and not r.get("plumbing") and             r["status"] not in ("JUDGE_ERROR", "REPORT_ERROR")
+
+    b = ["<h1>AI-assisted FPGA development: summary of all runs</h1>",
+         "<p class='sub'>Three tasks, each at three difficulty levels. Each cell counts every real run "
+         "(never just the best one). Assisted, test-setup and invalid runs are listed below but not counted.</p>"]
+    for model in sorted({r.get("model", "?") for r in res if real(r)}):
+        b.append(f"<h2 class='model'>Model: {esc(model)}</h2><div class='card scroll'><table class='grid'>"
+                 "<tr><th></th>" + "".join(f"<th>{lv.capitalize()}</th>" for lv in LEVELS) + "</tr>")
+        for t in ("H", "B", "C"):
+            row = [r for r in res if r["track"] == t and real(r) and r.get("model", "?") == model]
+            b.append(f"<tr><th class='task'>{esc(TRACK_NAMES[t])}</th>" +
+                     "".join(cell([r for r in row if r.get("level", "hard") == lv], t) for lv in LEVELS) + "</tr>")
+        b.append("</table></div>")
+    if not any(real(r) for r in res):
+        b.append("<p class='note'>No real runs yet.</p>")
+    b.append("<p class='note'>Speed and size results for “Speed up an existing block” need the FPGA vendor "
+             "tools; without them the check confirms the behaviour is unchanged.</p>")
     rows = "".join(
-        f"<tr><td><a href='{esc(r['run'])}/report.html'>{esc(r['run'])}</a></td><td>{esc(r['track'])}</td>"
+        f"<tr><td><a href='{esc(r['run'])}/report.html'>{esc(r['run'])}</a></td>"
+        f"<td>{esc(r['track'])} · {esc(r.get('level', 'hard'))}</td>"
         f"<td>{'ASSISTED' if r['assist'] else ('INVALID' if r['leak'] else 'PLUMBING' if r.get('plumbing') else 'real')}</td>"
         f"<td class='{'pass' if r['status'] == 'PASS' else '' if r['status'] == 'SCORED' else 'fail'}'>"
         f"{esc(r['status'] if r['status'] != 'SCORED' else str(r['found']) + '/' + str(r['n_bugs']))}</td>"

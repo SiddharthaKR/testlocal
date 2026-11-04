@@ -29,6 +29,12 @@ ROOT = HARNESS.parent
 ENV = yaml.safe_load((ROOT / "config" / "env.yaml").read_text())
 PY = sys.executable           # real interpreter (not the py launcher) so terminate() hits it
 RTL_REL = Path("pyrpl") / str(ENV["pyrpl_rtl"])
+# Track H per level: the module the agent must write
+H_MODULES = {"easy": "red_pitaya_gain_block", "medium": "red_pitaya_fir_block", "hard": "red_pitaya_notch_block"}
+# Track B per level: (top module, its dependencies); the agent's copies of all of them are judged
+B_LEVELS = {"easy": ("red_pitaya_iq_demodulator_block", []),
+            "medium": ("red_pitaya_iq_modulator_block", ["red_pitaya_product_sat", "red_pitaya_saturate"]),
+            "hard": ("red_pitaya_pid_block", ["red_pitaya_filter_block", "red_pitaya_lpf_block"])}
 PROMPT = ("Read AGENTS.md and tasks/{t}/task.md, then complete the task described there. "
           "Work autonomously until it is done; do not ask me questions.")
 
@@ -147,17 +153,18 @@ def judge(track, ws, run, assist, level="hard"):
     t0 = time.time()
     extra = ["--level", level] + (["--assist"] if assist else [])
     if track == "H":
-        cand = find_one(ws, "red_pitaya_notch_block.v", RTL_REL / "red_pitaya_notch_block.v",
-                        module="red_pitaya_notch_block")
+        mod = H_MODULES[level]
+        cand = find_one(ws, f"{mod}.v", RTL_REL / f"{mod}.v", module=mod)
         if cand is None:
-            (run / "judge.json").write_text(json.dumps(dict(track="H", assist=assist, status="NO_CANDIDATE",
-                                            error="agent produced no red_pitaya_notch_block.v", cases=[], checks={})))
+            (run / "judge.json").write_text(json.dumps(dict(track="H", level=level, module=mod, assist=assist,
+                                            status="NO_CANDIDATE", error=f"agent produced no {mod}",
+                                            cases=[], checks={})))
             log("judge H: NO_CANDIDATE")
             return time.time() - t0, None
         cmd = [PY, str(HARNESS / "judge" / "notch" / "run_judge.py"), str(run), str(cand)] + extra
     elif track == "B":
-        cand = [ws / RTL_REL / f for f in ("red_pitaya_pid_block.v", "red_pitaya_filter_block.v",
-                                           "red_pitaya_lpf_block.v")]
+        top, deps = B_LEVELS[level]
+        cand = [ws / RTL_REL / f"{m}.v" for m in [top] + deps]
         cmd = [PY, str(HARNESS / "judge" / "pid_equiv" / "run_judge.py"), str(run)] + [str(c) for c in cand] + extra
     else:
         bj = ws / "bugs.json"
@@ -176,7 +183,7 @@ def judge(track, ws, run, assist, level="hard"):
     return time.time() - t0, cand
 
 
-def qor(track, cand, run):
+def qor(track, cand, run, level="hard"):
     """Synthesis / implementation of the agent's design with a clean copy of the tools."""
     if track not in ("H", "B") or cand is None:
         return 0
@@ -189,12 +196,13 @@ def qor(track, cand, run):
                               f'write_tool_env "{tools.as_posix()}/tool_env.sh"'], check=True)
     work = run / "qor"; work.mkdir(exist_ok=True)
     if track == "H":
-        cmd = [sh, (tools / "run_synth.sh").as_posix(), "red_pitaya_notch_block", Path(cand).as_posix()]
+        cmd = [sh, (tools / "run_synth.sh").as_posix(), H_MODULES[level], Path(cand).as_posix()]
         out = "synth.json"
     else:
-        shutil.copy2(HARNESS / "tasks" / "B" / "baseline.json", run / "baseline.json")
+        base = HARNESS / "tasks" / "B" / ("baseline.json" if level == "hard" else f"{level}/baseline.json")
+        shutil.copy2(base, run / "baseline.json")
         period = json.loads((run / "baseline.json").read_text())["T_target_ns"]
-        cmd = [sh, (tools / "run_impl.sh").as_posix(), "red_pitaya_pid_block", str(period)] + \
+        cmd = [sh, (tools / "run_impl.sh").as_posix(), B_LEVELS[level][0], str(period)] + \
               [Path(c).as_posix() for c in cand]
         out = "impl.json"
     r = subprocess.run(cmd, cwd=work, capture_output=True, text=True)
@@ -236,7 +244,7 @@ def main():
     changed, viv_agent = collect(ws, run)
     log(f"agent changed {len(changed)} files")
     judge_s, cand = judge(a.track, ws, run, a.assist, a.level)
-    viv_judge = qor(a.track, cand, run)
+    viv_judge = qor(a.track, cand, run, a.level)
 
     leak = subprocess.run([PY, str(HARNESS / "judge" / "leak_check.py"), str(run), str(ws)],
                           capture_output=True, text=True)

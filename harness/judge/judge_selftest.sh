@@ -20,15 +20,25 @@ expect() {  # expect <PASS|FAIL> <label> <cmd...>
 }
 
 if [ "$track" = H ] || [ "$track" = all ]; then
-  echo "Track H (notch judge):"
-  R="$ROOT/harness/judge/ref_solutions/notch"
+  echo "Track H (notch / gain / FIR judges):"
   rm -rf "$OUT/H"; mkdir -p "$OUT/H"
-  "$PYTHON" "$R/make_broken.py" > /dev/null || exit 2
   J="$ROOT/harness/judge/notch/run_judge.py"
+  R="$ROOT/harness/judge/ref_solutions/notch"
+  "$PYTHON" "$R/make_broken.py" > /dev/null || exit 2
   expect PASS H_ref "$PYTHON" "$J" "$OUT/H/ref" "$R/red_pitaya_notch_block.v"
   for v in "$R"/broken/*.v; do
     n="$(basename "$v" .v)"
     expect FAIL "H_broken_$n" "$PYTHON" "$J" "$OUT/H/$n" "$v"
+  done
+  for lvl in easy:gain:gain_block medium:fir:fir_block; do
+    IFS=: read -r L D M <<< "$lvl"
+    R="$ROOT/harness/judge/ref_solutions/$D"
+    "$PYTHON" "$R/make_broken.py" > /dev/null || exit 2
+    expect PASS "H_${L}_ref" "$PYTHON" "$J" "$OUT/H/${L}_ref" "$R/red_pitaya_$M.v" --level "$L"
+    for v in "$R"/broken/*.v; do
+      n="$(basename "$v" .v)"
+      expect FAIL "H_${L}_broken_$n" "$PYTHON" "$J" "$OUT/H/${L}_$n" "$v" --level "$L"
+    done
   done
 fi
 
@@ -43,6 +53,19 @@ if [ "$track" = B ] || [ "$track" = all ]; then
   for v in "$P"/broken/*.v; do
     n="$(basename "$v" .v)"
     expect FAIL "B_broken_$n" "$PYTHON" "$J" "$OUT/B/$n" "$v"
+  done
+  RTLV="$ROOT/$(yaml_get pyrpl_repo)/$(yaml_get pyrpl_rtl)"
+  for lvl in easy medium; do
+    if [ "$lvl" = easy ]; then G=iq_demod; M=red_pitaya_iq_demodulator_block; else G=iq_mod; M=red_pitaya_iq_modulator_block; fi
+    P="$ROOT/harness/judge/ref_solutions/$G"
+    echo "Track B ($lvl):"
+    "$PYTHON" "$P/make_${G}_solutions.py" > /dev/null || exit 2
+    expect PASS "B_${lvl}_ref_itself" "$PYTHON" "$J" "$OUT/B/${lvl}_ref" "$RTLV/$M.v" --level $lvl
+    expect PASS "B_${lvl}_ref_optimized" "$PYTHON" "$J" "$OUT/B/${lvl}_opt" "$P/$M.v" --level $lvl
+    for v in "$P"/broken/*.v; do
+      n="$(basename "$v" .v)"
+      expect FAIL "B_${lvl}_$n" "$PYTHON" "$J" "$OUT/B/${lvl}_$n" "$v" --level $lvl
+    done
   done
 fi
 

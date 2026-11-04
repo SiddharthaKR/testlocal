@@ -2,7 +2,7 @@
 """
 Track H judge.
 
-  run_judge.py <outdir> <candidate.v> [--n 4096] [--seed S] [--assist]
+  run_judge.py <outdir> <candidate.v> [--level easy|medium|hard] [--n 4096] [--seed S] [--assist]
 
 Generates hidden stimuli, simulates the candidate with the judge testbench,
 compares against notch_model.py, and writes <outdir>/judge.json plus data
@@ -23,6 +23,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 sys.path.insert(0, str(HERE)); sys.path.insert(0, str(HERE.parent))
 import compare as C           # noqa: E402
+import levels as L            # noqa: E402
 from common import SETTLE_CYCLES, DEFAULT_SEED  # noqa: E402
 
 
@@ -68,6 +69,9 @@ def main():
     ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
     a.candidate = str(Path(a.candidate).resolve())
+    lv = L.LEVELS[a.level]
+    maxlat = lv["max_latency"]
+    generic = a.level != "hard"
 
     t0 = time.time()
     out = Path(a.outdir).resolve(); out.mkdir(parents=True, exist_ok=True)
@@ -78,8 +82,8 @@ def main():
     log = data / "judge.log"
     iverilog, vvp = iverilog_bins()
 
-    res = dict(track="H", assist=a.assist, seed=a.seed, settle_cycles=SETTLE_CYCLES,
-               max_latency=C.MAX_LATENCY, candidate=str(Path(a.candidate).resolve()),
+    res = dict(track="H", level=a.level, module=lv["module"], assist=a.assist, seed=a.seed,
+               settle_cycles=SETTLE_CYCLES, max_latency=maxlat, candidate=str(Path(a.candidate).resolve()),
                cases=[], checks={}, status="FAIL")
 
     def finish(code):
@@ -91,10 +95,13 @@ def main():
         sys.exit(code)
 
     subprocess.run([sys.executable, str(HERE / "gen_stimuli.py"), str(data), "--n", str(a.n),
-                    "--seed", str(a.seed)], check=True, stdout=subprocess.DEVNULL)
+                    "--seed", str(a.seed),
+                    "--level", a.level], check=True, stdout=subprocess.DEVNULL)
     meta = json.loads((data / "cases.json").read_text())
 
-    if run([iverilog, "-g2012", "-o", data / "judge.vvp", HERE / "tb_notch_judge.v", a.candidate], data, log):
+    cmd = [iverilog, "-g2012"] + ([f"-DDUT_MODULE={lv['module']}"] if generic else []) + \
+          ["-o", data / "judge.vvp", HERE / lv["tb"], a.candidate]
+    if run(cmd, data, log):
         res["status"] = "COMPILE_ERROR"
         res["error"] = "candidate failed to compile with the judge testbench (see judge_data/judge.log)"
         finish(1)
@@ -102,18 +109,39 @@ def main():
     # filter cases
     for c in meta["cases"]:
         stim, exp, csv = data / "stim" / f"{c['name']}.txt", data / "expected" / f"{c['name']}.txt", data / f"dut_{c['name']}.csv"
-        b0, b1, b2, a1, a2 = c["coeffs"]
-        run([vvp, "-n", data / "judge.vvp", "+mode=filter", f"+stim={stim}", f"+out={csv}",
-             f"+n={c['n']}", f"+b0={b0}", f"+b1={b1}", f"+b2={b2}", f"+a1={a1}", f"+a2={a2}"], data, log)
-        r = C.compare_files(exp, csv) if csv.exists() else dict(**{"pass": False}, error="no output")
+        if generic:
+            regf = data / f"regs_{c['name']}.txt"
+            regf.write_text("".join(f"{ad:x} {v}\n" for ad, v in c["reg_writes"]))
+            run([vvp, "-n", data / "judge.vvp", "+mode=filter", f"+stim={stim}", f"+out={csv}",
+                 f"+n={c['n']}", f"+regs={regf}"], data, log)
+        else:
+            b0, b1, b2, a1, a2 = c["coeffs"]
+            run([vvp, "-n", data / "judge.vvp", "+mode=filter", f"+stim={stim}", f"+out={csv}",
+                 f"+n={c['n']}", f"+b0={b0}", f"+b1={b1}", f"+b2={b2}", f"+a1={a1}", f"+a2={a2}"], data, log)
+        r = C.compare_files(exp, csv, maxlat) if csv.exists() else dict(**{"pass": False}, error="no output")
         r.update(name=c["name"], coef_set=c["coef_set"], n_saturated=c["n_saturated"])
+        if generic:
+            r["params"] = c["params"]
         res["cases"].append(r)
 
     # register / bypass / X checks (bypass uses the first random stimulus)
     chk = data / "checks.txt"
     bstim = data / "stim" / f"{meta['cases'][1]['name']}.txt"
-    run([vvp, "-n", data / "judge.vvp", "+mode=checks", f"+out={chk}", f"+stim={bstim}", f"+n={a.n}"], data, log)
-    if chk.exists():
+    if generic:
+        script = data / "readback_script.txt"
+        script.write_text("".join(f"{op} {ad:x} {v:x}\n" for op, ad, v in lv["readback"]))
+        run([vvp, "-n", data / "judge.vvp", "+mode=checks", f"+out={chk}", f"+script={script}"], data, log)
+    else:
+        run([vvp, "-n", data / "judge.vvp", "+mode=checks", f"+out={chk}", f"+stim={bstim}", f"+n={a.n}"], data, log)
+    if chk.exists() and generic:
+        checks, _ = parse_checks(chk)
+        for k, v in checks.items():   # group readbacks per address: rb<idx>_0x<addr> -> rb_0x<addr>
+            g = "rb_" + k.split("_", 1)[1] if k.startswith("rb") else k
+            old = res["checks"].get(g)
+            fail_first = old is None or (old["pass"] and not v["pass_"])
+            res["checks"][g] = dict(**{"pass": v["pass_"] and (old is None or old["pass"])},
+                                    detail=v["detail"] if fail_first else old["detail"])
+    elif chk.exists():
         checks, brows = parse_checks(chk)
         res["checks"] = {k: dict(**{"pass": v["pass_"]}, detail=v["detail"]) for k, v in checks.items()}
         (data / "bypass.csv").write_text("\n".join(brows) + "\n")

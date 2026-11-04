@@ -61,16 +61,40 @@ def stimuli(n, f0, rng):
     return out
 
 
+def generic(a, out, rng):
+    """easy / medium: cases come from the level registry (levels.py)."""
+    import levels as L
+    lv = L.LEVELS[a.level]
+    cases = []
+    for sname, p in lv["sets"].items():
+        params = {k: v for k, v in p.items() if k != "f0"}
+        for stim_name, x in stimuli(a.n, p["f0"], rng).items():
+            name = f"{sname}_{stim_name}"
+            y = lv["model"](x.tolist(), params)
+            nm.write_ints(out / "stim" / f"{name}.txt", x.tolist())
+            nm.write_ints(out / "expected" / f"{name}.txt", y)
+            cases.append(dict(name=name, coef_set=sname, params=params, reg_writes=[list(w) for w in lv["regs"](params)],
+                              f0=p["f0"], f_wanted=wanted_freq(p["f0"]), wanted_amp=WANTED_AMP, n=a.n,
+                              n_saturated=int(sum(v in (nm.DATA_MIN, nm.DATA_MAX) for v in y))))
+    meta = dict(seed=a.seed, fs=FS, n=a.n, level=a.level, module=lv["module"], cases=cases)
+    (out / "cases.json").write_text(json.dumps(meta, indent=1))
+    print(f"{len(cases)} cases -> {out} (seed {a.seed}, level {a.level})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("outdir")
     ap.add_argument("--n", type=int, default=4096)
     ap.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    ap.add_argument("--level", default="hard", choices=["easy", "medium", "hard"])
     a = ap.parse_args()
     out = Path(a.outdir)
     (out / "stim").mkdir(parents=True, exist_ok=True)
     (out / "expected").mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(a.seed)
+
+    if a.level != "hard":
+        return generic(a, out, rng)
 
     cases = []
     for sname, p in COEF_SETS.items():

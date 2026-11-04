@@ -42,10 +42,12 @@ mkdir -p /tmp/b && cd /tmp/b
 TOOLS=<repo>/harness/tools; RTL=<repo>/vendor/pyrpl/pyrpl/fpga/rtl
 bash $TOOLS/run_impl.sh red_pitaya_pid_block 8.0 <repo>/harness/tasks/B/pid_ref.v $RTL/red_pitaya_filter_block.v $RTL/red_pitaya_lpf_block.v
 ```
-Copy LUT/FF/DSP/WNS/Fmax from `impl.json` into `harness/tasks/B/baseline.json`, set `"status": "MEASURED"`, and set `T_target_ns = 1000 / (1.3 * Fmax_MHz)` so the baseline fails timing. (The tools read `tool_env.sh`; if it is missing, run once via `run_demo.sh --setup-only` and copy `tools/tool_env.sh` from the workspace.)
+Repeat for the easy/medium modules (`red_pitaya_iq_demodulator_block`; `red_pitaya_iq_modulator_block` with `red_pitaya_product_sat.v red_pitaya_saturate.v`) into `harness/tasks/B/easy|medium/baseline.json`. Copy LUT/FF/DSP/WNS/Fmax from `impl.json` into `harness/tasks/B/baseline.json`, set `"status": "MEASURED"`, and set `T_target_ns = 1000 / (1.3 * Fmax_MHz)` so the baseline fails timing. (The tools read `tool_env.sh`; if it is missing, run once via `run_demo.sh --setup-only` and copy `tools/tool_env.sh` from the workspace.)
 
 ## 6. Run the demo
+Every track has `--level easy|medium|hard` (default `hard`); see README for what each level is. A good management sequence is easy, then medium, then hard per track, 3–5 runs each. The summary shows a pass rate per level.
 ```bash
+bash harness/run_demo.sh --track H --level easy   # gain block
 bash harness/run_demo.sh --track H            # notch filter (hero)
 bash harness/run_demo.sh --track H --assist   # same, with a skeleton (marked ASSISTED, never counted)
 bash harness/run_demo.sh --track B            # PID optimization

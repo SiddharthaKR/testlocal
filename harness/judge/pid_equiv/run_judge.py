@@ -3,8 +3,11 @@
 Track B judge: latency-tolerant bit-exact equivalence of an optimized PID
 against pid_ref.v, plus QoR (if Vivado is available).
 
-  run_judge.py <outdir> <candidate_pid.v> [extra candidate .v ...]
-               [--cycles 100000] [--seed S] [--assist]
+  run_judge.py <outdir> <candidate.v> [extra candidate .v ...]
+               [--cycles 100000] [--seed S] [--assist] [--level easy|medium|hard]
+
+Levels: hard = red_pitaya_pid_block (default), medium = red_pitaya_iq_modulator_block,
+easy = red_pitaya_iq_demodulator_block (references are the vendor RTL).
 
 The reference is pid_ref.v + vendor filter/lpf blocks, with module names
 prefixed "ref_" so both designs live in one simulation. Candidate files not
@@ -32,6 +35,19 @@ RTL = ROOT / str(ENV["pyrpl_repo"]) / str(ENV["pyrpl_rtl"])
 PID_REF = ROOT / "harness" / "tasks" / "B" / "pid_ref.v"
 DEPS = ["red_pitaya_filter_block.v", "red_pitaya_lpf_block.v"]
 REF_MODULES = ["red_pitaya_pid_block", "red_pitaya_filter_block", "red_pitaya_lpf_block"]
+# level -> module, testbench, reference files, default candidate deps (vendor RTL), modules to prefix ref_
+LEVELS = {
+    "hard": dict(module="red_pitaya_pid_block", tb="tb_pid_equiv.v", ref=[PID_REF] + [RTL / d for d in DEPS],
+                 deps=DEPS, ref_modules=REF_MODULES),
+    "medium": dict(module="red_pitaya_iq_modulator_block", tb="tb_iq_mod_equiv.v",
+                   ref=[RTL / f for f in ["red_pitaya_iq_modulator_block.v", "red_pitaya_product_sat.v",
+                                          "red_pitaya_saturate.v"]],
+                   deps=["red_pitaya_product_sat.v", "red_pitaya_saturate.v"],
+                   ref_modules=["red_pitaya_iq_modulator_block", "red_pitaya_product_sat", "red_pitaya_saturate"]),
+    "easy": dict(module="red_pitaya_iq_demodulator_block", tb="tb_iq_demod_equiv.v",
+                 ref=[RTL / "red_pitaya_iq_demodulator_block.v"], deps=[],
+                 ref_modules=["red_pitaya_iq_demodulator_block"]),
+}
 MAX_LAG = 8
 F_C = 1e6   # crossover frequency for the phase-margin cost
 
@@ -50,8 +66,8 @@ def iverilog_bins():
     return str(Path(winpath(d)) / "iverilog"), str(Path(winpath(d)) / "vvp")
 
 
-def prefix_ref(src_text):
-    for m in REF_MODULES:
+def prefix_ref(src_text, modules=REF_MODULES):
+    for m in modules:
         src_text = re.sub(rf"\b{m}\b", f"ref_{m}", src_text)
     return src_text
 
@@ -91,19 +107,20 @@ def main():
     log = data / "judge.log"; log.write_text("")
     iverilog, vvp = iverilog_bins()
 
+    lv = LEVELS[a.level]
     cand = [Path(c).resolve() for c in a.candidate]
     names = {c.name for c in cand}
-    cand += [RTL / d for d in DEPS if d not in names]
+    cand += [RTL / d for d in lv["deps"] if d not in names]
 
     ref_dir = data / "ref"; ref_dir.mkdir(exist_ok=True)
     refs = []
-    for src in [PID_REF] + [RTL / d for d in DEPS]:
+    for src in lv["ref"]:
         dst = ref_dir / f"ref_{src.name}"
-        dst.write_text(prefix_ref(src.read_text()))
+        dst.write_text(prefix_ref(src.read_text(), lv["ref_modules"]))
         refs.append(dst)
 
     res = dict(track="B", assist=a.assist, seed=a.seed, cycles=a.cycles, settle_cycles=SETTLE_CYCLES,
-               max_lag=MAX_LAG, candidate=[str(c) for c in cand], status="FAIL")
+               max_lag=MAX_LAG, level=a.level, module=lv["module"], candidate=[str(c) for c in cand], status="FAIL")
 
     def finish(code):
         res["judge_seconds"] = round(time.time() - t0, 1)
@@ -116,7 +133,7 @@ def main():
         sys.exit(code)
 
     with open(log, "a") as f:
-        rc = subprocess.run([iverilog, "-g2012", "-o", str(data / "equiv.vvp"), str(HERE / "tb_pid_equiv.v")]
+        rc = subprocess.run([iverilog, "-g2012", "-o", str(data / "equiv.vvp"), str(HERE / lv["tb"])]
                             + [str(p) for p in refs + cand], stdout=f, stderr=subprocess.STDOUT).returncode
     if rc:
         res["status"] = "COMPILE_ERROR"; res["reasons"] = ["compile failed, see judge_data/judge.log"]
@@ -128,8 +145,9 @@ def main():
         res["reasons"] = ["simulation produced no result"]; finish(1)
 
     r = parse(data / "equiv.txt")
-    res.update(coverage=r.get("coverage", {}), x_count=r.get("x_count"),
-               readback=dict(reads=r.get("rb_reads"), mismatches=r.get("rb_mismatch"), first=r["rb_fail"][:5]))
+    res.update(coverage=r.get("coverage", {}), x_count=r.get("x_count"))
+    if a.level == "hard":
+        res["readback"] = dict(reads=r.get("rb_reads"), mismatches=r.get("rb_mismatch"), first=r["rb_fail"][:5])
     n = res["coverage"].get("compared", 0)
     exact = [k for k, v in sorted(r["lags"].items()) if v["mismatch"] == 0 and v["match"] == n]
     best = max(r["lags"], key=lambda k: r["lags"][k]["match"])

@@ -69,14 +69,21 @@ p = sys.argv[3]; text = open(p).read().replace("{REVIEW_FILES}", files); open(p,
 PYEOF
 fi
 if [ "$track" = B ]; then
-  # functional reference for run_equiv.sh (original + kd fix); not a solution
+  # functional reference for run_equiv.sh (the original block); not a solution
   mkdir -p "$WS/tasks/B/ref"
-  cp "$HARNESS/tasks/B/pid_ref.v" "$WS/tasks/B/ref/red_pitaya_pid_block.v"
-  cp "$VENDOR/$(yaml_get pyrpl_rtl)/red_pitaya_filter_block.v" "$VENDOR/$(yaml_get pyrpl_rtl)/red_pitaya_lpf_block.v" "$WS/tasks/B/ref/"
+  VRTL="$VENDOR/$(yaml_get pyrpl_rtl)"
+  case "$level" in
+    easy)   cp "$VRTL/red_pitaya_iq_demodulator_block.v" "$WS/tasks/B/ref/" ;;
+    medium) cp "$VRTL/red_pitaya_iq_modulator_block.v" "$VRTL/red_pitaya_product_sat.v" \
+               "$VRTL/red_pitaya_saturate.v" "$WS/tasks/B/ref/" ;;
+    hard)   cp "$HARNESS/tasks/B/pid_ref.v" "$WS/tasks/B/ref/red_pitaya_pid_block.v"
+            cp "$VRTL/red_pitaya_filter_block.v" "$VRTL/red_pitaya_lpf_block.v" "$WS/tasks/B/ref/"
+            # start from pid_ref.v (upstream + kd X fix) so the agent isn't failed by the upstream sim bug
+            cp "$HARNESS/tasks/B/pid_ref.v" "$WS/$RTL_REL/red_pitaya_pid_block.v" ;;
+  esac
   chmod u+w "$WS"/tasks/B/ref/*.v
-  # start from pid_ref.v (upstream + kd X fix) so the agent isn't failed by the upstream sim bug
-  cp "$HARNESS/tasks/B/pid_ref.v" "$WS/$RTL_REL/red_pitaya_pid_block.v"
-  t_target="$("$PYTHON" -c "import json,sys; print(json.load(open(sys.argv[1]))['T_target_ns'])" "$(nativepath "$HARNESS/tasks/B/baseline.json")")"
+  BASE="$HARNESS/tasks/B/baseline.json"; [ "$level" != hard ] && BASE="$HARNESS/tasks/B/$level/baseline.json"
+  t_target="$("$PYTHON" -c "import json,sys; print(json.load(open(sys.argv[1]))['T_target_ns'])" "$(nativepath "$BASE")")"
   sed -i "s/{T_TARGET}/$t_target/g" "$WS/tasks/B/task.md"
 fi
 if $assist; then
