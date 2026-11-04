@@ -2,7 +2,7 @@
 
     py basic/harness.py fpga_gain                      # one run, WITH skills + tools
     py basic/harness.py fpga_gain --without            # one run, plain agent (no skills, no tools)
-    py basic/harness.py fpga_gain --compare --runs 3   # A/B: 3 runs without, 3 with, then a table
+    py basic/harness.py fpga_gain --compare --runs 3   # 3 runs each way (interleaved, alternating order), then a table
     py basic/harness.py fpga_gain --setup-only         # just build the workspace (no agent)
 """
 import argparse, atexit, datetime, json, os, re, shutil, stat, subprocess, sys, time
@@ -10,12 +10,9 @@ import argparse, atexit, datetime, json, os, re, shutil, stat, subprocess, sys, 
 BASIC = os.path.dirname(os.path.abspath(__file__))
 PROMPT = "Read task.md and complete it. Work autonomously."
 # Added to task.md only when skills + tools are present (so the "without" run is not told about them)
-HELP = {
-    "fpga_gain": "Help available: load the `verilog-fixed-point` skill before you start, and simulate "
-                 "with the `run_sim` tool (short summary; full logs in `sim_logs/`).",
-    "py_func": "Help available: load the `python-tdd` skill before you start, and run your tests "
-               "with the `run_tests` tool.",
-}
+# Identical text for "with" and "without" runs: the only difference between them is whether the
+# .opencode/skills and .opencode/tools folders exist (opencode lists them to the model itself).
+HINT = "Skills and tools may be available in this workspace; use them if they help."
 
 
 def load_config():
@@ -38,9 +35,11 @@ def native_path(p):
 
 
 def tool_env(cfg):
-    """Environment variables read by tools/*.ts and the judges."""
+    """Environment variables read by tools/*.ts and the judges.
+    PYTHON_CMD is the absolute path of the interpreter running this harness: launcher names like
+    `py` (or Windows' `python` store alias) cannot be started by the tools' Bun runtime."""
     return {"IVERILOG_DIR": native_path(cfg.get("iverilog_dir", "")),
-            "PYTHON_CMD": cfg.get("python_cmd", "python3")}
+            "PYTHON_CMD": sys.executable}
 
 
 def rmtree(path):
@@ -88,7 +87,7 @@ def setup_workspace(task, cfg, with_help=True):
         shutil.copytree(os.path.join(BASIC, "skills"), os.path.join(ws, ".opencode", "skills"))
         shutil.copytree(os.path.join(BASIC, "tools"), os.path.join(ws, ".opencode", "tools"))
     tm = os.path.join(ws, "task.md")
-    text = open(tm, encoding="utf-8").read().replace("{HELP}", HELP.get(task, "") if with_help else "")
+    text = open(tm, encoding="utf-8").read().replace("{HELP}", HINT)
     open(tm, "w", encoding="utf-8").write(text)
     model = cfg["model"]
     oc = {
@@ -143,7 +142,9 @@ def run_agent(ws, cfg, log_path):
     # iverilog/python on PATH in BOTH modes: the agent can always simulate from the shell;
     # "with" only adds know-how (skill) and a convenient action (tool)
     tenv = tool_env(cfg)
-    path = os.pathsep.join(x for x in (tenv["IVERILOG_DIR"], os.environ.get("PATH", "")) if x)
+    # a real python first on PATH (Windows' bare `python` may be a Microsoft Store placeholder)
+    pydir = os.path.dirname(sys.executable)
+    path = os.pathsep.join(x for x in (pydir, tenv["IVERILOG_DIR"], os.environ.get("PATH", "")) if x)
     env = dict(os.environ, PWD=ws, OPENCODE_CONFIG=os.path.join(ws, "opencode.json"), PATH=path, **xdg, **tenv)
     t0 = time.time()
     with open(log_path, "w", encoding="utf-8", errors="replace") as log:
@@ -200,7 +201,8 @@ def compare(task, cfg, runs):
                  "'with' side would get the skill but no tool. Use opencode 1.x (set opencode_cmd).")
     out = {"without": [], "with": []}
     for i in range(runs):                       # interleave, so time-of-day effects hit both equally
-        for mode in ("without", "with"):
+        # alternate which mode goes first, so warm-up/order effects cancel out
+        for mode in (("without", "with") if i % 2 == 0 else ("with", "without")):
             out[mode].append(one_run(task, cfg, mode == "with"))
     print()
     print(f"A/B result for '{task}' with {cfg['model']} ({runs} runs each)")
@@ -219,7 +221,7 @@ def main():
     ap.add_argument("task")
     ap.add_argument("--setup-only", action="store_true", help="build the workspace, do not run the agent")
     ap.add_argument("--without", action="store_true", help="plain agent: no skills, no custom tools")
-    ap.add_argument("--compare", action="store_true", help="A/B: --runs runs without, then with")
+    ap.add_argument("--compare", action="store_true", help="compare with vs without skills+tools: --runs runs each, interleaved")
     ap.add_argument("--runs", type=int, default=3)
     a = ap.parse_args()
     cfg = load_config()

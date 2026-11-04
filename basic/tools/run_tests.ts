@@ -7,7 +7,8 @@ export default tool({
     testfile: tool.schema.string().describe("Test file, e.g. test_fixedpoint.py"),
   },
   async execute(args, context) {
-    const py = (process.env.PYTHON_CMD || "python3").split(/\s+/)
+    // PYTHON_CMD is the harness's absolute interpreter path (may contain spaces: do not split it)
+    const py = process.env.PYTHON_CMD || "python3"
     const r = await Bun.$`${py} ${args.testfile}`.cwd(context.directory).nothrow().quiet()
     const text = (r.stdout.toString() + r.stderr.toString()).split("\n").filter((l) => l.trim())
     const head = r.exitCode === 0 ? "TESTS: PASS (exit 0)" : `TESTS: FAIL (exit ${r.exitCode})`

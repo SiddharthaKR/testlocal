@@ -1,6 +1,7 @@
 // Hidden testbench: configures the DUT over the bus, streams a stimulus file (one integer
 // per line) one sample per clock, and writes dat_o once per clock (one integer per line).
 // Plusargs: +gain= +shift= +offset= +stim=<file> +out=<file>
+//       or  +mode=bus +out=<file>   (bus checks: reset values, readback, constant, unknown address, ack, no X)
 `timescale 1ns/1ps
 module tb;
   reg clk = 0, rstn = 0;
@@ -21,6 +22,27 @@ module tb;
   reg [1023:0] stim_name, out_name;
   reg signed [13:0] mem [0:65535];
 
+  reg [1023:0] mode;
+  reg [31:0] got;
+  integer acked;
+
+  // read one register; the spec says ack and rdata come one clock after ren
+  task bus_read(input [15:0] a, output [31:0] d);
+    begin
+      @(negedge clk); addr = a; ren = 1;
+      @(negedge clk); ren = 0; acked = (ack === 1'b1); d = rdata;
+    end
+  endtask
+
+  // one bus check: "CHECK <name> PASS|FAIL got=<hex> exp=<hex>"
+  task expect_read(input [8*24-1:0] name, input [15:0] a, input [31:0] exp);
+    begin
+      bus_read(a, got);
+      $fdisplay(fout, "CHECK %0s %0s got=%h exp=%h ack=%0d", name,
+                (got === exp && acked) ? "PASS" : "FAIL", got, exp, acked);
+    end
+  endtask
+
   task bus_write(input [15:0] a, input [31:0] d);
     begin
       @(negedge clk); addr = a; wdata = d; wen = 1;
@@ -30,6 +52,27 @@ module tb;
   endtask
 
   initial begin
+    if ($value$plusargs("mode=%s", mode) && mode == "bus") begin
+      if (!$value$plusargs("out=%s", out_name)) begin $display("FAIL: missing +out"); $finish; end
+      fout = $fopen(out_name, "w");
+      repeat (5) @(negedge clk);
+      rstn = 1;
+      repeat (10) @(negedge clk);
+      $fdisplay(fout, "CHECK no_x_after_reset %0s got=%b exp=no-X ack=1", (^dat_o === 1'bx) ? "FAIL" : "PASS", dat_o);
+      expect_read("reset_gain",   16'h100, 32'h0);
+      expect_read("reset_shift",  16'h104, 32'h0);
+      expect_read("reset_offset", 16'h108, 32'h0);
+      expect_read("const_0x200",  16'h200, 32'd16);
+      expect_read("unknown_addr", 16'h300, 32'h0);
+      bus_write(16'h100, 32'hABCD_8001);          // upper junk ignored; -32767 sign-extended
+      bus_write(16'h104, 32'hFFFF_FFF5);          // 4-bit field: 5
+      bus_write(16'h108, 32'h0000_2005);          // 14-bit signed: -8187 sign-extended
+      expect_read("gain_signext",   16'h100, 32'hFFFF_8001);
+      expect_read("shift_4bit",     16'h104, 32'h0000_0005);
+      expect_read("offset_signext", 16'h108, 32'hFFFF_E005);
+      $fclose(fout);
+      $finish;
+    end
     if (!$value$plusargs("gain=%d", gain) || !$value$plusargs("shift=%d", shift) ||
         !$value$plusargs("offset=%d", offset) || !$value$plusargs("stim=%s", stim_name) ||
         !$value$plusargs("out=%s", out_name)) begin

@@ -1,5 +1,5 @@
 """Hidden judge for fpga_gain. Usage: judge.py <workspace>. Exit 0 = PASS, 1 = FAIL."""
-import math, os, random, subprocess, sys, tempfile
+import atexit, math, os, random, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "agent"))
@@ -34,6 +34,7 @@ def main():
     if not os.path.isfile(dut):
         fail("red_pitaya_gain_block.v not found in the workspace")
     tmp = tempfile.mkdtemp(prefix="judge_gain_")
+    atexit.register(shutil.rmtree, tmp, True)    # never leave temp files behind
     comp = subprocess.run([bin_("iverilog"), "-g2012", "-o", "sim.vvp",
                            os.path.join(HERE, "hidden", "tb.v"), dut],
                           cwd=tmp, capture_output=True, text=True)
@@ -67,6 +68,18 @@ def main():
                 problems.append(f"output differs from model ({tag}): {wrong[best]} of {len(idx)} samples wrong, "
                                 f"e.g. input #{i}: got {'X' if y[i + best] is None else y[i + best]}, "
                                 f"expected {exp[i]}")
+    # bus/register contract from the spec: reset values, readback, constant, unknown address, ack, no X
+    subprocess.run([bin_("vvp"), "sim.vvp", "+mode=bus", "+out=bus.txt"], cwd=tmp,
+                   capture_output=True, text=True, timeout=120)
+    try:
+        checks = [l.split() for l in open(os.path.join(tmp, "bus.txt")) if l.startswith("CHECK")]
+    except OSError:
+        checks = [["CHECK", "bus_checks", "FAIL", "got=no-output", "exp=output"]]
+    bad = [c for c in checks if c[2] != "PASS"]
+    if bad:
+        c = bad[0]
+        problems.append(f"bus check '{c[1]}' failed ({' '.join(c[3:])}); "
+                        f"{len(bad)} of {len(checks)} bus checks failed")
     score = 100 * n_ok / max(n_all, 1)
     if problems:
         fail(problems[0], score)

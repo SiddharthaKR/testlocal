@@ -8,7 +8,7 @@ export default tool({
     "errors or FAIL lines. Full log is saved in sim_logs/.",
   args: {
     testbench: tool.schema.string().describe("Testbench file, e.g. tb.v"),
-    sources: tool.schema.string().describe("Source files, space separated, e.g. 'red_pitaya_gain_block.v'"),
+    sources: tool.schema.string().describe("Source files, space separated, e.g. 'my_block.v other.v'"),
   },
   async execute(args, context) {
     const dir = context.directory

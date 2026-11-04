@@ -24,12 +24,11 @@ CASES = [  # (x, gain, shift, bits, expected)
 
 # run every case (no early stop) so the judge can report a score, not just pass/fail
 first_bad, n_ok = None, 0
-checks = [((x, g, s, b), want) for x, g, s, b, want in CASES] + [((7, 3, 2), "default-bits")]
+# default bits must be 14: 1000*100/16 = 6250 fits in 14 bits but would clamp to 127 with 8 bits
+checks = [((x, g, s, b), want) for x, g, s, b, want in CASES] + [((1000, 100, 4), 6250)]
 for args, want in checks:
     try:
         got = rq(*args)
-        if want == "default-bits":
-            want = rq(7, 3, 2, 14)          # default bits is 14
         ok = got == want
     except Exception as e:                  # a crash counts as a wrong answer
         got, ok = f"{type(e).__name__}: {e}", False

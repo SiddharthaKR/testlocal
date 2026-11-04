@@ -52,9 +52,8 @@ sat14(v) clamps v to [-8192, 8191]
 ## Golden model
 `model.py` (in this folder):
 - `gain_block(x, gain, shift, offset)`: bit-true output
-- CLI: `python model.py run --in stim.txt --out y.txt --gain 3000 --shift 8 --offset 100`. Files have one signed integer per line. Use the `run_tests` tool or `python` to run it.
+- CLI: `python model.py run --in stim.txt --out y.txt --gain 3000 --shift 8 --offset 100`. Files have one signed integer per line. Run it with `python`.
 
 ## How you will be judged (by an independent checker you cannot see)
-- Hidden stimuli: several signal types and several (gain, shift, offset) settings, including settings and inputs that drive the output into saturation, and a setting with shift = 0. Your output must match the model exactly at a single fixed latency of 0 to 4 cycles.
+- Hidden stimuli: two signal types (random and sine) and several (gain, shift, offset) settings, including settings and inputs that drive the output into saturation, and a setting with shift = 0. Your output must match the model exactly at a single fixed latency of 0 to 4 cycles.
 - Register readback (including sign extension and the constant), and no X/Z on `dat_o` after reset.
-- Synthesis resources and timing are reported.

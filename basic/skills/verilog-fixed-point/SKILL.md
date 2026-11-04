@@ -1,55 +1,59 @@
 ---
 name: verilog-fixed-point
-description: Signed fixed-point arithmetic in Verilog (gain, shift, rounding, saturation, bus registers) and how to verify it against a Python model with a CSV-writing testbench. Load before writing DSP-style RTL.
+description: Signed fixed-point arithmetic in Verilog (multiply, shift, rounding, saturation, register buses, reset) and how to verify it against a golden model with a self-checking testbench under iverilog. Use before writing or debugging DSP-style RTL.
 ---
 
 # Verilog fixed-point: practical rules
 
-## Signed arithmetic
-- Declare everything that is signed as `signed`: `reg signed [15:0] gain;`. One unsigned
-  operand in an expression makes the whole expression unsigned (silent bug).
-- Widths: a product needs `wa + wb` bits (14 x 16 -> 30). Declare the result wide enough
-  (e.g. 32 bits) BEFORE multiplying. Extra bits are free; lost bits are bugs.
-- Use `>>>` (arithmetic shift) on signed values. `>>` shifts in zeros and breaks negatives.
-- Slicing (`x[13:0]`) drops the sign information; only slice after saturating.
+## Signed arithmetic and widths
+- Declare signed things `signed` (`reg signed [15:0] k;`). One unsigned operand makes the whole
+  expression unsigned, silently. Constants too: use `8'sd5`, not `5`. Use `$signed(x)` to cast.
+- A product needs `wa + wb` bits. Declare the result wide enough BEFORE multiplying, and keep
+  the sum of products and offsets at full width. Extra bits are free; lost bits are bugs.
+- Use `>>>` on signed values (arithmetic shift). `>>` shifts in zeros and breaks negatives.
+- Do not slice (`x[13:0]`) a value before it is saturated; slicing drops the sign.
 
 ## Round half up, then shift
 ```verilog
 wire signed [31:0] half = (shift == 0) ? 32'sd0 : (32'sd1 <<< (shift - 1));
-wire signed [31:0] r    = (p + half) >>> shift;     // adding 1<<(shift-1) = round half up
+wire signed [31:0] r    = (p + half) >>> shift;
 ```
-Plain `p >>> shift` truncates toward minus infinity: wrong for ties and for the .5 case.
+Adding `1 << (shift-1)` before `>>>` rounds ties up. Plain `>>>` floors. The `shift == 0` case
+must be special-cased: `1 << -1` is meaningless.
 
-## Saturation to 14 bit
+## Saturation to N bits
 ```verilog
-wire signed [31:0] t = r + offset;                  // do the add at full width
-wire signed [13:0] y = (t >  8191) ?  14'sd8191 :
-                       (t < -8192) ? -14'sd8192 : t[13:0];
+// t is wide; N = 14 here only as an example
+wire signed [N-1:0] y = (t > MAX) ? MAX : (t < MIN) ? MIN : t[N-1:0];
 ```
-Saturate ONCE, at the end, on the wide value. Never clamp an intermediate.
+Saturate once, at the end, on the wide value; never clamp an intermediate. Add any offset before
+saturating if the spec says so.
 
-## Registered bus pattern
-```verilog
-always @(posedge clk_i) if (!rstn_i) begin ... end else begin
-  if (wen && addr == 16'h100) gain <= wdata[15:0];
-  ack <= wen | ren;
-  case (addr) 16'h100: rdata <= {{16{gain[15]}}, gain}; default: rdata <= 0; endcase
-end
-```
-- Read back signed registers sign-extended (`{{N{reg[msb]}}, reg}`), unsigned ones zero-extended.
-- Pipeline the datapath (input reg -> multiply reg -> output reg); latency is then fixed.
+## Registers, buses, reset
+- Registered outputs and a pipeline of fixed depth: latency must not depend on any setting
+  (no bypass path for "special" values).
+- Reset synchronously and active low where specified: `always @(posedge clk) if (!rstn) ... else ...`.
+  Give every register a defined reset value; unreset registers read as X.
+- Use non-blocking `<=` in clocked blocks, blocking `=` only in combinational blocks.
+- Typical register bus: a write enable and address decode update registers; a read returns
+  registered data one cycle later; an acknowledge follows the request; unmapped addresses read 0.
+- Read signed registers back sign-extended (`{{N{r[msb]}}, r}`), unsigned ones zero-extended.
 
-## Testbench that writes CSV
-1. Generate stimulus with Python (one integer per line); read it with `$fscanf`/`$readmemh`.
-2. Reset, write the registers through the bus (set `addr/wdata`, pulse `wen` one cycle).
-3. Each clock: `$fdisplay(fd, "%0d", dat_o);` (`dat_o` must be `signed` to print negatives).
-4. `$finish`. Compare the CSV with the Python model allowing a fixed latency of N cycles:
-   `y_hw[i + N] == model[i]`. Print `FAIL ...` on mismatch so the run_sim tool shows it.
+## Self-checking testbench against a golden model
+1. Generate stimulus and expected output with a Python model (one integer per line).
+2. The testbench reads stimulus (`$fscanf`/`$readmemh`), resets, programs the registers, streams samples.
+3. Each clock, dump the output: `$fdisplay(fd, "%0d", dat_o);` (output must be `signed` to print negatives).
+4. Compare with the model allowing one fixed latency of N cycles (`hw[i+N] == model[i]`); print
+   `FAIL ...` with index, got and expected, so a short tool summary shows it. Then `$finish`.
+5. Test several settings and stimuli, including ones that saturate and the smallest/largest shifts.
 
-## Common mistakes
-- Forgetting `signed` on a register, a constant (`1'b1` vs `1'sb1`), or a wire.
-- Truncating instead of rounding; saturating before adding the offset.
-- Using `<<` / `>>` where `<<<` / `>>>` is needed.
-- Shift amount of 0: `1 << (shift-1)` is invalid, special-case it.
-- Different latency for different settings (e.g. bypass path when shift == 0).
-- Reading X: registers not reset; testbench drives inputs before reset ends.
+## Syntax pitfalls (Verilog-2001, iverilog `-g2012`)
+- Signal names must not contain `$`; do not use it outside system tasks.
+- Declare wires/regs at module level, not inside `always`/`begin` blocks (unless the block is named).
+- Size every constant (`16'h100`, `14'sd8191`); unsized ones are 32-bit and may surprise you.
+- Do not assign one reg from two always blocks; do not mix blocking and non-blocking on one signal.
+
+## Iterating
+Fix the FIRST compiler error, recompile, repeat (later errors are often consequences). When the
+simulation mismatches, print the first differing index, input, got and expected, and look for the
+signature: off by one near ties = rounding, huge values = missing saturation, sign flips = missing `signed`.
