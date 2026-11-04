@@ -1,0 +1,25 @@
+section,task,level,mode,runs,passed,score_or_found,median_minutes,notes
+basic,py_func,,plain,3,2,100%,0.9,
+basic,py_func,,skill+tool,3,1,0%,1.7,model never loaded the skill
+basic,fpga_gain,,plain,3,0,0%,0.2,
+basic,fpga_gain,,skill+tool,3,0,0%,6.1,several runs ended early: tool calls written as plain text
+full,H,easy,rep1,1,0,COMPILE_ERROR,,
+full,H,easy,rep2,1,0,COMPILE_ERROR,,
+full,H,medium,rep1,1,0,COMPILE_ERROR,,
+full,H,medium,rep2,1,0,NO_CANDIDATE,,no file
+full,H,hard,rep1,1,0,NO_CANDIDATE,,
+full,H,hard,rep2,1,0,FAIL,,0/12 cases
+full,H,hard,assist,1,0,FAIL,,
+full,B,easy,rep1,1,0,JUDGE_ERROR,,X outputs
+full,B,easy,rep2,1,0,COMPILE_ERROR,,
+full,B,medium,rep1,1,0,NO_CHANGE,,
+full,B,medium,rep2,1,1,PASS,,"equivalent, 99,985 cycles"
+full,B,hard,rep1,1,0,COMPILE_ERROR,,
+full,B,hard,rep2,1,0,FAIL,,
+full,C,easy,rep1,1,0,2/3,,
+full,C,easy,rep2,1,0,0/3,,
+full,C,easy,opencode2.x,1,0,0/3,,1 false positive
+full,C,medium,rep1,1,0,0/5,,no answer file
+full,C,medium,rep2,1,0,0/5,,1 false positive
+full,C,hard,rep1,1,0,1/10,,
+full,C,hard,rep2,1,0,0/10,,no answer file
