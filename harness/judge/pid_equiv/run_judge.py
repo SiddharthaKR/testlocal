@@ -165,6 +165,14 @@ def main():
         reasons.append(f"register readback differs ({r['rb_mismatch']} of {r['rb_reads']} reads)")
     if n < a.cycles // 2:
         reasons.append(f"only {n} cycles compared (judge coverage problem)")
+    # coverage counters are measured on the REFERENCE design: a zero means the stimulus stopped
+    # exercising that behaviour (e.g. saturation) -> the judge itself is broken, not the candidate
+    uncovered = [k for k, v in res["coverage"].items() if k not in ("compared", "excluded") and v == 0]
+    if uncovered:
+        res["status"] = "JUDGE_ERROR"
+        res["error"] = f"hidden stimulus never exercised: {', '.join(uncovered)} (judge coverage problem)"
+        res["reasons"] = reasons + [res["error"]]
+        finish(2)
     if res["latency"] is not None:
         res["delta_latency"] = res["latency"]
         res["phase_cost_deg_at_1MHz"] = round(360 * F_C * res["latency"] * float(ENV["clk_period_ns"]) * 1e-9, 2)

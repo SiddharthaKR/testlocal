@@ -86,9 +86,20 @@ def run_agent(ws, track, interactive, run):
     if not exe:
         raise SystemExit("opencode not found on PATH")
     # opencode takes its project dir from PWD (inherited from the calling shell = the repo),
-    # not from the process cwd, so set both to the workspace
-    env = dict(os.environ, OPENCODE_CONFIG=str(ROOT / "config" / "opencode.json"), PWD=str(ws))
+    # not from the process cwd, so set both to the workspace.
+    # Own config/data/state dirs per run: the user's personal opencode config does not leak in
+    # (opencode 1.x even refuses some of them), and every run starts from a clean session store.
+    home = run / "opencode_home"
+    env = dict(os.environ, OPENCODE_CONFIG=str(ROOT / "config" / "opencode.json"), PWD=str(ws),
+               XDG_CONFIG_HOME=str(home / "config"), XDG_DATA_HOME=str(home / "data"),
+               XDG_STATE_HOME=str(home / "state"))
+    for d in ("config", "data", "state"):
+        (home / d).mkdir(parents=True, exist_ok=True)
     model = f"local/{ENV['model']}"
+    ver = subprocess.run([exe, "--version"], capture_output=True, text=True).stdout.strip()
+    # 1.x: no --standalone, working dir via --dir;  2.x: private server via --standalone
+    run_flags = ["--dir", str(ws)] if ver.startswith("1.") else ["--standalone"]
+    log(f"opencode {ver}")
     t0 = time.time()
     if interactive:
         log("interactive: opencode opens in the workspace; quit it when the agent is done")
@@ -97,7 +108,7 @@ def run_agent(ws, track, interactive, run):
     else:
         timeout = float(ENV.get("agent_timeout_min", 40)) * 60
         with open(run / "agent_console.log", "w", encoding="utf-8", errors="replace") as f:
-            p = subprocess.Popen([exe, "run", "--standalone", "--auto", "-m", model, "--title", run.name,
+            p = subprocess.Popen([exe, "run", *run_flags, "--auto", "-m", model, "--title", run.name,
                                   PROMPT.format(t=track)], cwd=ws, env=env, stdout=f, stderr=subprocess.STDOUT)
             try:
                 rc = p.wait(timeout=timeout); timed_out = False

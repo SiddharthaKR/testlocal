@@ -169,6 +169,13 @@ def main():
     for k, v in res["checks"].items():
         if not v["pass"]:
             print(f"  FAIL check {k}: {v['detail']}")
+    if not consistent:   # spec: ONE fixed latency for every setting
+        by_lat = {}
+        for c in res["cases"]:
+            by_lat.setdefault(c.get("latency"), []).append(c["name"])
+        res["latency_error"] = "latency is not the same for all settings: " + \
+            "; ".join(f"{lat} cycles in {len(n)} case(s), e.g. {n[0]}" for lat, n in sorted(by_lat.items(), key=str))
+        print(f"  FAIL {res['latency_error']}")
     finish(0 if ok else 1)
 
 

@@ -58,6 +58,21 @@ def load_reports(path):
     return out, ("; ".join(warn) or None)
 
 
+STEMS = ("negat", "doubl", "revers", "uninitiali", "not initiali", "invert", "subtract", "misalign",
+         "polarity", "satur", "truncat", "swap", "slice", "round")
+
+
+def keyword_hit(k, text):
+    """Whole-word match ('sign' must not match 'signal'/'assign'/'design'), except known word
+    stems ('negat' -> negative/negated) which only need a word start. Symbols match literally."""
+    k = k.lower().strip()
+    if not re.match(r"^[a-z0-9]([a-z0-9 \-]*[a-z0-9])?$", k):   # e.g. "[5-1:0]", "+6", "-quadrature": literal
+        return k in text
+    start = r"(?<![a-z0-9_])"
+    end = "" if k.startswith(STEMS) else r"(?![a-z0-9_])"
+    return re.search(start + re.escape(k) + end, text) is not None
+
+
 def score(reports, key):
     win = key.get("match_window", 3)
     bugs = key["bugs"]
@@ -68,7 +83,7 @@ def score(reports, key):
 
     def explains(r, b):   # description names what is actually wrong
         d = r["description"].lower()
-        return any(k.lower() in d for k in b.get("keywords", [])) if b.get("keywords") else True
+        return any(keyword_hit(k, d) for k in b.get("keywords", [])) if b.get("keywords") else True
 
     def on_upstream_line(r):   # exactly inside a known upstream issue, and not exactly on a seeded bug
         return any(r["file"] == p["file"] and p["lines"][0] <= r["line"] <= p["lines"][1] for p in pre) and \

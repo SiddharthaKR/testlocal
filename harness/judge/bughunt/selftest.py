@@ -78,6 +78,9 @@ cases = [
     # from a real Gemma run: exact line of a known upstream issue, 1 line from a seeded bug
     ("upstream issue next to a bug", [dict(file="red_pitaya_filter_block.v", line=80,
       description="shift segment may be out of range for the LPF block")], 0, 0),
+    # keyword must be a whole word: "sign" inside "signal"/"assign"/"design" is not an explanation
+    ("keyword inside another word", [dict(file="red_pitaya_pid_block.v", line=205,
+      description="the assign of the error signal looks odd in this design")], 0, 0),
     ("known upstream kd issue", [dict(file="red_pitaya_pid_block.v", line=270, description="x")], 0, 0),
     ("duplicate report", exact[:1] * 3, 1, 0),
     ("path prefix + backslashes", [dict(d, file="review\\" + d["file"]) for d in exact], n, 0),
