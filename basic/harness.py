@@ -5,7 +5,7 @@
     py basic/harness.py fpga_gain --compare --runs 3   # A/B: 3 runs without, 3 with, then a table
     py basic/harness.py fpga_gain --setup-only         # just build the workspace (no agent)
 """
-import argparse, datetime, json, os, re, shutil, stat, subprocess, sys, time
+import argparse, atexit, datetime, json, os, re, shutil, stat, subprocess, sys, time
 
 BASIC = os.path.dirname(os.path.abspath(__file__))
 PROMPT = "Read task.md and complete it. Work autonomously."
@@ -50,11 +50,37 @@ def rmtree(path):
     shutil.rmtree(path, onerror=onerr)
 
 
+def pid_alive(pid):
+    """Is process `pid` running? (On Windows os.kill(pid, 0) would TERMINATE it, so ask tasklist.)"""
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+        return str(pid) in out
+    try:
+        os.kill(pid, 0)                          # POSIX: signal 0 only checks existence
+        return True
+    except OSError:
+        return False
+
+
+def lock_workspace(ws):
+    """One harness at a time per workspace: a second run would wipe the first one's files."""
+    lock = ws + ".lock"
+    if os.path.exists(lock):
+        pid = open(lock).read().strip()
+        if pid.isdigit() and pid_alive(int(pid)):
+            sys.exit(f"workspace {ws} is in use by harness process {pid}; wait for it to finish")
+        # otherwise: stale lock from a crashed run
+    open(lock, "w").write(str(os.getpid()))
+    atexit.register(lambda: os.path.exists(lock) and os.remove(lock))
+
+
 def setup_workspace(task, cfg, with_help=True):
     """Fresh workspace = task's agent/ files (+ .opencode/{skills,tools} when with_help) + opencode.json."""
     ws = os.path.abspath(os.path.join(BASIC, cfg["workspace"]))
     if ws == BASIC or BASIC.startswith(ws + os.sep) or ws.startswith(BASIC + os.sep):
         sys.exit(f"refusing to use workspace {ws}: it must be outside basic/ and not contain it")
+    if not os.path.exists(ws + ".lock") or open(ws + ".lock").read().strip() != str(os.getpid()):
+        lock_workspace(ws)
     if os.path.isdir(ws):
         rmtree(ws)
     shutil.copytree(os.path.join(BASIC, "tasks", task, "agent"), ws)        # only agent/, never hidden/
