@@ -286,6 +286,9 @@ def track_b(run, judge):
     elif judge.get("status") == "COMPILE_ERROR":
         out["headline"] = "The AI's modified design did not compile"
         out["sub"] = "The Verilog it changed has syntax errors, so its behaviour could not be compared."
+    elif judge.get("status") == "JUDGE_ERROR":
+        out["headline"] = "The checker could not grade this design"
+        out["sub"] = "The equivalence check crashed or saw no valid outputs (often unknown/X values from the design)."
     else:
         out["headline"] = ("Same behaviour, speed not measured" if judge.get("status") == "PASS"
                            else "Optimization changed the behaviour")
@@ -395,7 +398,7 @@ def page(title, body):
 
 def kv_table(rows):
     return "<div class='scroll'><table>" + "".join(
-        f"<tr><th>{esc(k)}</th><td>{esc(v)}</td></tr>" for k, v in rows) + "</table></div>"
+        f"<tr><th>{esc(k)}</th><td>{esc("n/a" if v is None else v)}</td></tr>" for k, v in rows) + "</table></div>"
 
 
 def run_report(run):

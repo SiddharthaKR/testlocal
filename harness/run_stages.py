@@ -170,7 +170,7 @@ def judge(track, ws, run, assist, level="hard"):
             (run / "judge.json").write_text(json.dumps(dict(track="H", level=level, module=mod, assist=assist,
                                             status="NO_CANDIDATE", error=f"agent produced no {mod}",
                                             cases=[], checks={})))
-            log("judge H: NO_CANDIDATE")
+            log("JUDGE H: NO_CANDIDATE (agent wrote no module)")
             return time.time() - t0, None
         cmd = [PY, str(HARNESS / "judge" / "notch" / "run_judge.py"), str(run), str(cand)] + extra
     elif track == "B":
@@ -190,7 +190,8 @@ def judge(track, ws, run, assist, level="hard"):
             cases=[], checks={})))
         log(f"JUDGE {track}: JUDGE_ERROR (see judge_console.log)")
         return time.time() - t0, cand
-    log((r.stdout.strip().splitlines() or ["judge produced no output"])[0])
+    lines = r.stdout.strip().splitlines()
+    log(next((l for l in lines if l.startswith("JUDGE")), lines[0] if lines else "judge produced no output"))
     if track == "B":   # equivalence alone is not success: an untouched design is trivially equivalent
         orig = ws / "tasks" / "B" / "ref" / f"{B_LEVELS[level][0]}.v"
         if orig.exists() and Path(cand[0]).exists() and Path(cand[0]).read_bytes() == orig.read_bytes():

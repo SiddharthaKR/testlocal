@@ -79,7 +79,7 @@ def parse(out_txt):
         if not f:
             continue
         if f[0] == "LAG":
-            k, match, mism, fc, fe, fg = map(int, f[1:7])
+            k, match, mism, fc, fe, fg = [int(t) if re.fullmatch(r"-?\d+", t) else -1 for t in f[1:7]]  # X outputs print non-integers
             r["lags"][k] = dict(match=match, mismatch=mism, first_cycle=fc, expected=fe, got=fg)
         elif f[0] == "XCOUNT":
             r["x_count"] = int(f[1])
