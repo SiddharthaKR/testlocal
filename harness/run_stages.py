@@ -13,6 +13,7 @@ Updates <run_dir>/run_meta.json with timings:
 import argparse
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -120,18 +121,28 @@ def collect(ws, run):
     return names, viv
 
 
-def find_one(ws, name, preferred):
+def find_one(ws, name, preferred, module=None):
+    """Expected path first, then the file name anywhere, then (for Verilog) any
+    file that defines `module` (agents sometimes pick their own file name)."""
     if (ws / preferred).exists():
         return ws / preferred
-    hits = [p for p in ws.rglob(name) if "tasks" not in p.parts and ".git" not in p.parts]
-    return hits[0] if hits else None
+    skip = {"tasks", "tools", ".git", "sim_logs", "equiv_logs"}
+    hits = [p for p in ws.rglob(name) if not skip & set(p.parts)]
+    if hits or not module:
+        return hits[0] if hits else None
+    pat = re.compile(rf"^\s*module\s+{module}\b", re.M)
+    for p in sorted(ws.rglob("*.v")):
+        if not skip & set(p.parts) and pat.search(p.read_text(errors="ignore")):
+            return p
+    return None
 
 
 def judge(track, ws, run, assist):
     t0 = time.time()
     extra = ["--assist"] if assist else []
     if track == "H":
-        cand = find_one(ws, "red_pitaya_notch_block.v", RTL_REL / "red_pitaya_notch_block.v")
+        cand = find_one(ws, "red_pitaya_notch_block.v", RTL_REL / "red_pitaya_notch_block.v",
+                        module="red_pitaya_notch_block")
         if cand is None:
             (run / "judge.json").write_text(json.dumps(dict(track="H", assist=assist, status="NO_CANDIDATE",
                                             error="agent produced no red_pitaya_notch_block.v", cases=[], checks={})))
@@ -148,6 +159,13 @@ def judge(track, ws, run, assist):
         cmd = [PY, str(HARNESS / "judge" / "bughunt" / "score.py"), str(run), str(cand)] + extra
     r = subprocess.run(cmd, capture_output=True, text=True)
     (run / "judge_console.log").write_text(r.stdout + r.stderr)
+    if not (run / "judge.json").exists():   # judge crashed: record why instead of leaving no result
+        (run / "judge.json").write_text(json.dumps(dict(
+            track=track, assist=assist, status="JUDGE_ERROR", candidate=str(cand),
+            error=(r.stderr or r.stdout).strip()[-1500:] or f"judge exited with code {r.returncode}",
+            cases=[], checks={})))
+        log(f"JUDGE {track}: JUDGE_ERROR (see judge_console.log)")
+        return time.time() - t0, cand
     log((r.stdout.strip().splitlines() or ["judge produced no output"])[0])
     return time.time() - t0, cand
 

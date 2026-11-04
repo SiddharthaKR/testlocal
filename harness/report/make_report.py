@@ -99,6 +99,9 @@ def track_h(run, judge):
         if st == "COMPILE_ERROR":
             out["headline"] = "The AI's design did not compile"
             out["sub"] = "The Verilog it wrote has syntax errors, so it could not be tested."
+        elif st == "JUDGE_ERROR":
+            out["headline"] = "The checker failed on this run"
+            out["sub"] = "This is a problem in the test setup, not a verdict on the AI. Details are in the technical section."
         elif st == "NO_CANDIDATE":
             out["headline"] = "The AI did not produce a design"
             out["sub"] = "No red_pitaya_notch_block.v was written."
@@ -412,6 +415,8 @@ def run_report(run):
                  for p in judge.get("per_bug", [])]
         rows += [(f"report {r['file']}:{r['line']}", f"{r['verdict']}: {r['description']}")
                  for r in judge.get("reports", [])[:40]]
+    if judge.get("error"):
+        rows.append(("judge error", judge["error"]))
     rows += [("judge seed", judge.get("seed")), ("judge seconds", judge.get("judge_seconds"))]
     b.append("<details><summary>Technical details (for engineers)</summary>" + kv_table(rows) + "</details>")
 
@@ -440,7 +445,8 @@ def summary(runs_dir):
          "<p class='sub'>Pass rates and medians over every real run. Assisted runs are listed separately "
          "and never counted.</p><div class='tiles'>"]
     for t in ("H", "B", "C"):
-        real = [r for r in res if r["track"] == t and not r["assist"] and not r["leak"] and not r.get("plumbing")]
+        real = [r for r in res if r["track"] == t and not r["assist"] and not r["leak"] and not r.get("plumbing")
+                and r["status"] not in ("JUDGE_ERROR", "REPORT_ERROR")]   # setup failures are not verdicts
         if real and t == "C":
             fs = [r["found"] for r in real if r.get("found") is not None]
             big = (f"Median {statistics.median(fs):g} of {real[-1]['n_bugs']} bugs found" if fs
