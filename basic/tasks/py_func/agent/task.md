@@ -12,4 +12,7 @@ negative numbers. Saturation clamps to [-2**(bits-1), 2**(bits-1) - 1].
 2. Run it, then implement, then iterate until it passes.
 3. Write `AGENT_REPORT.md`: what you implemented and the evidence (tool output).
 
+Editing: re-read a file right before editing it and copy the exact lines. If an edit fails twice
+("could not find oldString"), stop retrying it and rewrite the whole file with the write tool.
+
 {HELP}

@@ -10,4 +10,7 @@ Implement the Verilog module `red_pitaya_gain_block` exactly as described in `sp
 4. Write `AGENT_REPORT.md`: your design, the latency you chose, and the evidence
    (tool output). Mention anything that is still not working.
 
+Editing: re-read a file right before editing it and copy the exact lines. If an edit fails twice
+("could not find oldString"), stop retrying it and rewrite the whole file with the write tool.
+
 {HELP}
